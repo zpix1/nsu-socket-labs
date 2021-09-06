@@ -90,6 +90,11 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &trueflag, sizeof trueflag) < 0) {
+        perror("setsockopt resuseport failed");
+        exit(EXIT_FAILURE);
+    }
+
     if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &trueflag, sizeof(trueflag)) < 0) {
         perror("setsockopt broadcast failed");
         exit(EXIT_FAILURE);
