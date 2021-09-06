@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <unordered_map>
 #include <algorithm>
+#include <sys/fcntl.h>
 
 const int remove_timeout = 5;
 
@@ -18,10 +19,10 @@ const int remove_timeout = 5;
 #define MAXLINE 1024
 
 namespace stuff {
-    template< typename ContainerT, typename PredicateT >
-    void erase_if( ContainerT& items, const PredicateT& predicate ) {
-        for( auto it = items.begin(); it != items.end(); ) {
-            if( predicate(*it) ) it = items.erase(it);
+    template<typename ContainerT, typename PredicateT>
+    void erase_if(ContainerT& items, const PredicateT& predicate) {
+        for (auto it = items.begin(); it != items.end();) {
+            if (predicate(*it)) it = items.erase(it);
             else ++it;
         }
     }
@@ -40,11 +41,14 @@ public:
         map[s] = time(0);
     }
 
-    void clear() {
+    bool clear() {
+        const int before = map.size();
         const time_t now = time(0);
-        return stuff::erase_if(map, [&now](const auto& item) {
+        stuff::erase_if(map, [&now](const auto& item) {
             return now - item.second >= remove_timeout;
         });
+//        std::cout << "before: " << before << " " << "after: " << map.size() << std::endl;
+        return map.size() != before;
     }
 
     void print() {
@@ -67,24 +71,29 @@ int main(int argc, char **argv) {
     const std::string MYSELF_ID = "UID-" + std::to_string(rand());
     std::cout << "MYSELF_ID is " << MYSELF_ID << std::endl;
 
+    int trueflag = 1;
+    int falseflag = 1;
     struct sockaddr_in servaddr{}, cliaddr{};
+
     struct sockaddr_in broadcastaddr{};
+    broadcastaddr.sin_addr.s_addr = inet_addr("225.1.1.1");
+    broadcastaddr.sin_family = AF_INET;
+    broadcastaddr.sin_port = htons(PORT);
 
     int sockfd;
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("socket creation failed");
         exit(EXIT_FAILURE);
     }
+    if (ioctl(sockfd, FIONBIO, (char *) &trueflag) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
 
-    servaddr.sin_family = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(PORT);
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    broadcastaddr.sin_family = AF_INET;
-    broadcastaddr.sin_port = htons(PORT);
-    inet_aton(argv[1], &broadcastaddr.sin_addr);
-
-    int trueflag = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
         perror("setsockopt reuseaddr failed");
         exit(EXIT_FAILURE);
@@ -97,6 +106,20 @@ int main(int argc, char **argv) {
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &trueflag, sizeof(trueflag)) < 0) {
         perror("setsockopt broadcast failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (setsockopt(sockfd, IPPROTO_IP, IP_MULTICAST_LOOP, &falseflag, sizeof(falseflag)) < 0) {
+        perror("IP_MULTICAST_LOOP failed");
+        exit(EXIT_FAILURE);
+    }
+
+    struct ip_mreq mreq{};
+    mreq.imr_multiaddr.s_addr = inet_addr(argv[1]);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("IP_ADD_MEMBERSHIP failed");
         exit(EXIT_FAILURE);
     }
 
@@ -113,7 +136,7 @@ int main(int argc, char **argv) {
     send_info_about_me(MYSELF_ID, sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
 
     do {
-//        std::cout << "polling..." << std::endl;
+        bool updated;
         int res = poll(&fd, 1, 1000);
 
         if (res < 0) {
@@ -121,30 +144,30 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
 
-        if (res == 0) {
-            send_info_about_me(MYSELF_ID, sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
-        } else {
+        updated = db.clear();
+
+        if (res != 0) {
             if (fd.revents != POLLIN) {
-                std::cerr << "bad: no polling" << std::endl;
+                std::cerr << "bad: no POLLIN" << std::endl;
             }
 
             char buffer[MAXLINE];
             const int len = sizeof(cliaddr);
 
-            ssize_t read = recvfrom(sockfd, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr,
-                                    (socklen_t *) &len);
+            ssize_t read = recvfrom(sockfd, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr, (socklen_t *) &len);
 
             if (read < 0) {
                 perror("recvfrom");
-                exit(EXIT_FAILURE);
+                exit(1);
+                continue;
             }
 
             buffer[read] = '\0';
             std::string client_data = buffer;
-//            if (client_data == MYSELF_ID) {
-//                std::cout << "already me" << std::endl;
-//                continue;
-//            }
+            if (client_data == MYSELF_ID) {
+                std::cout << "already me" << std::endl;
+                continue;
+            }
 
             char host[NI_MAXHOST];
             if (getnameinfo((sockaddr *) &cliaddr, len,
@@ -159,12 +182,14 @@ int main(int argc, char **argv) {
             }
 
 //            std::cout << "got info: " << client_data << ":" << cliaddr.sin_port << std::endl;
-            db.clear();
-            int exists = db.exists(client_data);
-            if (!exists) {
-                db.add(client_data);
-                db.print();
-            }
+            updated = updated || !db.exists(client_data);
+            db.add(client_data);
+        }
+
+        send_info_about_me(MYSELF_ID, sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
+
+        if (updated) {
+            db.print();
         }
     } while (true);
 
