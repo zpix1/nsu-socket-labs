@@ -12,7 +12,7 @@
 #define PORT     8080
 #define MAXLINE 1024
 
-void send_info_about_me(int sockfd, struct sockaddr * cliaddr_ptr, const size_t cliaddr_len) {
+void send_info_about_me(int sockfd, struct sockaddr *cliaddr_ptr, const size_t cliaddr_len) {
     std::string message = "HI";
     std::cout << "sending info about me" << std::endl;
     sendto(sockfd, message.c_str(), message.length(), 0, cliaddr_ptr, cliaddr_len);
@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
 
     broadcastaddr.sin_family = AF_INET;
     broadcastaddr.sin_port = htons(PORT);
-    inet_aton("10.9.47.255", &broadcastaddr.sin_addr);
+    inet_aton(argv[1], &broadcastaddr.sin_addr);
 
     int trueflag = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
