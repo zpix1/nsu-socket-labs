@@ -18,6 +18,16 @@ const int timeout = 1000;
 #define PORT     8080
 #define MAXLINE 1024
 
+namespace stuff {
+    template< typename ContainerT, typename PredicateT >
+    void erase_if( ContainerT& items, const PredicateT& predicate ) {
+        for( auto it = items.begin(); it != items.end(); ) {
+            if( predicate(*it) ) it = items.erase(it);
+            else ++it;
+        }
+    }
+}
+
 void send_info_about_me(const std::string& info, int sockfd, struct sockaddr *cliaddr_ptr, const size_t cliaddr_len) {
 //    std::cout << "sending info about me" << std::endl;
     sendto(sockfd, info.c_str(), info.length(), 0, cliaddr_ptr, cliaddr_len);
@@ -31,9 +41,9 @@ public:
         map[s] = time(0);
     }
 
-    int clear() {
+    void clear() {
         const time_t now = time(0);
-        return std::erase_if(map, [&now](const auto& item) {
+        return stuff::erase_if(map, [&now](const auto& item) {
             return now - item.second >= remove_timeout;
         });
     }
