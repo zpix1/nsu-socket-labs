@@ -20,8 +20,9 @@ void send_info_about_me(const std::string& info, int sockfd, struct sockaddr *cl
 }
 
 int main(int argc, char **argv) {
-
+    srand(time(0));
     const std::string MYSELF_ID = "UID-"+std::to_string(rand());
+    std::cout << "MYSELF is" << MYSELF_ID << std::endl;
 
     struct sockaddr_in servaddr{}, cliaddr{};
     struct sockaddr_in broadcastaddr{};
