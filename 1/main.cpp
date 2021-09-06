@@ -8,17 +8,21 @@
 #include <cstring>
 #include <iostream>
 #include <arpa/inet.h>
-
+#include <sys/socket.h>
+#include <netdb.h>
+#include <stdio.h>
 #define PORT     8080
 #define MAXLINE 1024
 
-void send_info_about_me(int sockfd, struct sockaddr *cliaddr_ptr, const size_t cliaddr_len) {
-    std::string message = "HI";
+void send_info_about_me(const std::string& info, int sockfd, struct sockaddr *cliaddr_ptr, const size_t cliaddr_len) {
     std::cout << "sending info about me" << std::endl;
-    sendto(sockfd, message.c_str(), message.length(), 0, cliaddr_ptr, cliaddr_len);
+    sendto(sockfd, info.c_str(), info.length(), 0, cliaddr_ptr, cliaddr_len);
 }
 
 int main(int argc, char **argv) {
+
+    const std::string MYSELF_ID = "UID-"+std::to_string(rand());
+
     struct sockaddr_in servaddr{}, cliaddr{};
     struct sockaddr_in broadcastaddr{};
 
@@ -57,7 +61,7 @@ int main(int argc, char **argv) {
             .events = POLLIN
     };
 
-    send_info_about_me(sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
+    send_info_about_me(MYSELF_ID, sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
 
     do {
         std::cout << "polling..." << std::endl;
@@ -70,7 +74,7 @@ int main(int argc, char **argv) {
 
         if (res == 0) {
             std::cout << "timeout" << std::endl;
-            send_info_about_me(sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
+            send_info_about_me(MYSELF_ID, sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
         } else {
             if (fd.revents != POLLIN) {
                 std::cerr << "bad: no polling" << std::endl;
@@ -79,8 +83,7 @@ int main(int argc, char **argv) {
             char buffer[MAXLINE];
             const int len = sizeof(cliaddr);
 
-            ssize_t read = recvfrom(sockfd, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr,
-                                    (socklen_t *) &len);
+            ssize_t read = recvfrom(sockfd, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr, (socklen_t *) &len);
 
             if (read < 0) {
                 perror("recvfrom");
@@ -88,8 +91,25 @@ int main(int argc, char **argv) {
             }
 
             buffer[read] = '\0';
+            std::string client_data = buffer;
+            if (client_data == MYSELF_ID) {
+                std::cout << "already me" << std::endl;
+                continue;
+            }
 
-            std::cout << "got info: " << buffer << std::endl;
+            char host[NI_MAXHOST];
+            if (getnameinfo((sockaddr*)&cliaddr, len,
+                            host, NI_MAXHOST, // to try to get domain name don't put NI_NUMERICHOST flag
+                            nullptr, 0,          // use char serv[NI_MAXSERV] if you need port number
+                            NI_NUMERICHOST    // | NI_NUMERICSERV
+            ) != 0) {
+                perror("getnameinfo");
+                exit(EXIT_FAILURE);
+            } else {
+                client_data += "-" + std::string(host);
+            }
+
+            std::cout << "got info: " << client_data << cliaddr.sin_port << std::endl;
         }
     } while (true);
 
