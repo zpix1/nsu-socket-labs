@@ -12,8 +12,7 @@
 #include <unordered_map>
 #include <algorithm>
 
-const int remove_timeout = 2000;
-const int timeout = 1000;
+const int remove_timeout = 5;
 
 #define PORT     8080
 #define MAXLINE 1024
