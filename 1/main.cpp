@@ -5,92 +5,90 @@
 #include <sys/socket.h>
 #include <ctime>
 #include <netinet/in.h>
-#include <cerrno>
-#include <unistd.h>
 #include <cstring>
+#include <iostream>
+#include <arpa/inet.h>
 
-#define SERVER_PORT  12345
+#define PORT     8080
+#define MAXLINE 1024
+
+void send_info_about_me(int sockfd, struct sockaddr * cliaddr_ptr, const size_t cliaddr_len) {
+    std::string message = "HI";
+    std::cout << "sending info about me" << std::endl;
+    sendto(sockfd, message.c_str(), message.length(), 0, cliaddr_ptr, cliaddr_len);
+}
 
 int main(int argc, char **argv) {
-    int on = 1, rc;
-    int listen_sd = socket(AF_INET6, SOCK_DGRAM, 0);
+    struct sockaddr_in servaddr{}, cliaddr{};
+    struct sockaddr_in broadcastaddr{};
 
-    if (listen_sd < 0) {
-        perror("socket() failed");
-        exit(-1);
+    int sockfd;
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(listen_sd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
-        perror("setsockopt() failed");
-        close(listen_sd);
-        exit(1);
+    servaddr.sin_family = AF_INET; // IPv4
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(PORT);
+
+    broadcastaddr.sin_family = AF_INET;
+    broadcastaddr.sin_port = htons(PORT);
+    inet_aton("10.9.47.255", &broadcastaddr.sin_addr);
+
+    int trueflag = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
+        perror("setsockopt failed");
+        exit(EXIT_FAILURE);
     }
 
-    if (ioctl(listen_sd, FIONBIO, (char *) &on) < 0) {
-        perror("ioctl() failed");
-        close(listen_sd);
-        exit(1);
+    if (bind(sockfd, (const struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
     }
 
-    struct sockaddr_in6 addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin6_family = AF_INET6;
-    memcpy(&addr.sin6_addr, &in6addr_any, sizeof(in6addr_any));
-    addr.sin6_port = htons(SERVER_PORT);
-    if (bind(listen_sd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-        perror("bind() failed");
-        close(listen_sd);
-        exit(-1);
-    }
+    struct pollfd fd{
+            .fd = sockfd,
+            .events = POLLIN
+    };
 
-    if (listen(listen_sd, 32) < 0) {
-        perror("listen() failed");
-        close(listen_sd);
-        exit(-1);
-    }
-
-    struct pollfd fd{};
-
-    fd.fd = listen_sd;
-    fd.events = POLLIN;
-
-    int timeout = 3 * 1000;
+    send_info_about_me(sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
 
     do {
-        printf("Waiting on poll()...\n");
-        int res = poll(&fd, 1, timeout);
+        std::cout << "polling..." << std::endl;
+        int res = poll(&fd, 1, 1000);
 
         if (res < 0) {
-            perror("  poll() failed");
-            break;
+            perror("poll failed");
+            exit(EXIT_FAILURE);
         }
 
-        if (rc == 0) {
-            printf("  poll() timed out.  End program.\n");
-            break;
+        if (res == 0) {
+            std::cout << "timeout" << std::endl;
+            send_info_about_me(sockfd, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
+        } else {
+            if (fd.revents != POLLIN) {
+                std::cerr << "bad: no polling" << std::endl;
+            }
+
+            char buffer[MAXLINE];
+            const int len = sizeof(cliaddr);
+
+            ssize_t read = recvfrom(sockfd, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr,
+                                    (socklen_t *) &len);
+
+            if (read < 0) {
+                perror("recvfrom");
+                exit(EXIT_FAILURE);
+            }
+
+            buffer[read] = '\0';
+
+            std::cout << "got info: " << buffer << std::endl;
         }
-
-        if (fd.revents == 0)
-            continue;
-
-        if (fd.revents != POLLIN) {
-            printf("  Error! revents = %d\n", fd.revents);
-            break;
-        }
-
-        printf("  Listening socket is readable\n");
-
-        const int bufsize = 1000;
-        char* buffer[bufsize];
-        int n = recvfrom(listen_sd, (char *)buffer, bufsize,
-                     MSG_WAITALL, ( struct sockaddr *) &cliaddr,
-                     &len);
-        buffer[n] = '\0';
-        printf("Client : %s\n", buffer);
-        sendto(sockfd, (const char *)hello, strlen(hello),
-               MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-               len);
     } while (true);
+
+    return 0;
 }
 
 
