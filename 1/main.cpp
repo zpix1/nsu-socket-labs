@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <algorithm>
 #include <random>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 const int remove_timeout = 5;
 
@@ -93,7 +95,7 @@ int main(int argc, char **argv) {
     int true_flag = 1;
     int false_flag = 0;
     {
-        if ((input_sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
+        if ((input_sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
             perror("socket creation failed");
             exit(EXIT_FAILURE);
         }
@@ -107,31 +109,54 @@ int main(int argc, char **argv) {
             perror("setsockopt resuseport failed");
             exit(EXIT_FAILURE);
         }
+        if (setsockopt(input_sock, SOL_SOCKET, SO_REUSEADDR, &true_flag, sizeof(true_flag))) {
+            perror("setsockopt SOL_SOCKET");
+            return 1;
+        }
+
+        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &false_flag, sizeof(false_flag))) {
+            perror("setsockopt IPV6_MULTICAST_IF");
+            return 1;
+        }
+        int hops = 255;
+        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops))) {
+            perror("setsockopt");
+            return 1;
+        }
 
         struct sockaddr_in6 server_addr{};
-        server_addr.sin6_family = AF_INET;
+        server_addr.sin6_family = AF_INET6;
         server_addr.sin6_port = htons(PORT);
         server_addr.sin6_addr = in6addr_any;
         if (bind(input_sock, (const struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
             perror("bind failed");
             exit(EXIT_FAILURE);
         }
+
+        struct sockaddr_in6 maddr;
         struct ipv6_mreq mreq{};
-        mreq.ipv6mr_multiaddr = inet_addr(argv[1]);
-        mreq.ipv6mr_interface = in6addr_any;
-        if (setsockopt(input_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-            perror("IP_ADD_MEMBERSHIP failed");
+
+        inet_pton(AF_INET6, argv[1], &maddr.sin6_addr);
+        memcpy(&mreq.ipv6mr_multiaddr, &maddr.sin6_addr, sizeof(mreq.ipv6mr_multiaddr));
+        mreq.ipv6mr_interface = 0;
+
+//        struct ipv6_mreq group;
+//        inet_pton (AF_INET6, argv[1], &group.ipv6mr_multiaddr.s6_addr);
+//        group.ipv6mr_interface = 0;
+
+        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, (char *)&mreq, sizeof mreq) < 0) {
+            perror("IPV6_JOIN_GROUP failed");
             exit(EXIT_FAILURE);
         }
     }
 
 
-    struct sockaddr_in broadcast_addr{};
-    broadcast_addr.sin_family = AF_INET;
-    broadcast_addr.sin_addr.s_addr = inet_addr(argv[1]);
-    broadcast_addr.sin_port = htons(PORT);
+    struct sockaddr_in6 broadcast_addr{};
+    broadcast_addr.sin6_family = AF_INET;
+    broadcast_addr.sin6_port = htons(PORT);
+    inet_pton(AF_INET6, argv[1], &broadcast_addr.sin6_addr);
     {
-        if ((output_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        if ((output_sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
             perror("output socket creation failed");
             exit(EXIT_FAILURE);
         }
@@ -204,7 +229,7 @@ int main(int argc, char **argv) {
 
             char host[NI_MAXHOST];
             std::string ip;
-            if (getnameinfo((sockaddr *) &client_addr, len, host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST) != 0) {
+            if (getnameinfo((sockaddr *) &client_addr, len, host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST) < 0) {
                 perror("getnameinfo");
                 exit(EXIT_FAILURE);
             } else {
