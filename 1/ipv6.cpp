@@ -16,73 +16,13 @@
 #include <netinet/in.h>
 #include <net/if.h>
 
-const int remove_timeout = 5;
-
-#define PORT     8080
-#define MAXLINE 1024
-
-namespace erase_if_fill {
-    template<typename ContainerT, typename PredicateT>
-    void erase_if(ContainerT& items, const PredicateT& predicate) {
-        for (auto it = items.begin(); it != items.end();) {
-            if (predicate(*it)) it = items.erase(it);
-            else ++it;
-        }
-    }
-}
-
-void send_info_about_me(const std::string& info, int sockfd, struct sockaddr *cliaddr_ptr, const size_t cliaddr_len) {
-//    std::cout << "sending info about me" << std::endl;
-    sendto(sockfd, info.c_str(), info.length(), 0, cliaddr_ptr, cliaddr_len);
-}
-
-class DB {
-    struct Entry {
-        time_t last_seen = 0;
-        std::string ip;
-        std::string token;
-    };
-    std::unordered_map<std::string, Entry> map;
-
-public:
-    void add(const std::string& ip, const std::string& token) {
-        Entry e{
-                time(nullptr),
-                ip,
-                token
-        };
-        map[token] = e;
-    }
-
-    bool clear() {
-        const size_t before = map.size();
-        const time_t now = time(nullptr);
-        erase_if_fill::erase_if(map, [&now](const auto& item) {
-            return now - item.second.last_seen >= remove_timeout;
-        });
-        return map.size() != before;
-    }
-
-    void print() {
-        system("clear");
-        printf("%-20s %-20s %-20s\n", "Token", "IP", "First seen");
-        printf("------------------------------------------------------------\n");
-
-        for (const auto& res: map) {
-            char buffer[100];
-            const auto time_info = localtime(&res.second.last_seen);
-            strftime(buffer, sizeof(buffer), "%H:%M:%S", time_info);
-            std::string timeStr(buffer);
-            printf("%-20s %-20s %-20s\n", res.second.token.c_str(), res.second.ip.c_str(), buffer);
-        }
-    }
-
-    bool exists(const std::string& token) {
-        return map.find(token) != map.end();
-    }
-};
+#include "shared.h"
 
 int main(int argc, char **argv) {
+    if (argc != 2) {
+        std::cerr << "usage: ./ipv6 ff12::1234" << std::endl;
+        exit(EXIT_FAILURE);
+    }
     DB db{};
     std::random_device rd;
     std::mt19937 rng(rd());
