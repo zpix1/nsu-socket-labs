@@ -114,10 +114,10 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &false_flag, sizeof(false_flag))) {
-            perror("setsockopt IPV6_MULTICAST_IF");
-            return 1;
-        }
+//        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &false_flag, sizeof(false_flag))) {
+//            perror("setsockopt IPV6_MULTICAST_IF");
+//            return 1;
+//        }
         int hops = 255;
         if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops))) {
             perror("setsockopt");
@@ -133,19 +133,12 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
 
-        struct sockaddr_in6 maddr;
-        struct ipv6_mreq mreq{};
 
-        inet_pton(AF_INET6, argv[1], &maddr.sin6_addr);
-        memcpy(&mreq.ipv6mr_multiaddr, &maddr.sin6_addr, sizeof(mreq.ipv6mr_multiaddr));
-        mreq.ipv6mr_interface = 0;
-
-//        struct ipv6_mreq group;
-//        inet_pton (AF_INET6, argv[1], &group.ipv6mr_multiaddr.s6_addr);
-//        group.ipv6mr_interface = 0;
-
-        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, (char *)&mreq, sizeof mreq) < 0) {
-            perror("IPV6_JOIN_GROUP failed");
+        struct ipv6_mreq group;
+        group.ipv6mr_interface = 0;
+        inet_pton(AF_INET6, argv[1], &group.ipv6mr_multiaddr);
+        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
+            perror("IPV6_JOIN_GROUP");
             exit(EXIT_FAILURE);
         }
     }
@@ -209,7 +202,7 @@ int main(int argc, char **argv) {
             }
 
             char buffer[MAXLINE];
-            struct sockaddr_in client_addr{};
+            struct sockaddr_in6 client_addr{};
             const int len = sizeof(client_addr);
 
             ssize_t read = recvfrom(input_sock, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &client_addr,
@@ -227,14 +220,11 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            char host[NI_MAXHOST];
+            char host[INET6_ADDRSTRLEN];
             std::string ip;
-            if (getnameinfo((sockaddr *) &client_addr, len, host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST) < 0) {
-                perror("getnameinfo");
-                exit(EXIT_FAILURE);
-            } else {
-                ip = std::string(host);
-            }
+
+            inet_ntop(AF_INET6, &(client_addr.sin6_addr), host, INET6_ADDRSTRLEN);
+            ip = host;
 
             updated = updated || !db.exists(token);
             db.add(ip, token);
