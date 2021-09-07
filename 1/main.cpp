@@ -14,6 +14,7 @@
 #include <random>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <net/if.h>
 
 const int remove_timeout = 5;
 
@@ -83,7 +84,6 @@ public:
 
 int main(int argc, char **argv) {
     DB db{};
-    srand(time(nullptr));
     std::random_device rd;
     std::mt19937 rng(rd());
     std::uniform_int_distribution<int> uni(1000000, 9999999);
@@ -109,15 +109,12 @@ int main(int argc, char **argv) {
             perror("setsockopt resuseport failed");
             exit(EXIT_FAILURE);
         }
+
         if (setsockopt(input_sock, SOL_SOCKET, SO_REUSEADDR, &true_flag, sizeof(true_flag))) {
             perror("setsockopt SOL_SOCKET");
             return 1;
         }
 
-//        if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &false_flag, sizeof(false_flag))) {
-//            perror("setsockopt IPV6_MULTICAST_IF");
-//            return 1;
-//        }
         int hops = 255;
         if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops))) {
             perror("setsockopt");
@@ -135,7 +132,7 @@ int main(int argc, char **argv) {
 
 
         struct ipv6_mreq group;
-        group.ipv6mr_interface = 0;
+        group.ipv6mr_interface = if_nametoindex("eth0");
         inet_pton(AF_INET6, argv[1], &group.ipv6mr_multiaddr);
         if (setsockopt(input_sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &group, sizeof group) < 0) {
             perror("IPV6_JOIN_GROUP");
@@ -153,29 +150,6 @@ int main(int argc, char **argv) {
             perror("output socket creation failed");
             exit(EXIT_FAILURE);
         }
-
-//        if (setsockopt(output_sock, SOL_SOCKET, SO_REUSEADDR, &true_flag, sizeof true_flag) < 0) {
-//            perror("setsockopt reuseaddr failed");
-//            exit(EXIT_FAILURE);
-//        }
-//
-//        if (setsockopt(output_sock, SOL_SOCKET, SO_REUSEPORT, &true_flag, sizeof true_flag) < 0) {
-//            perror("setsockopt resuseport failed");
-//            exit(EXIT_FAILURE);
-//        }
-//
-//        if (setsockopt(output_sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *) &false_flag, sizeof(false_flag)) < 0) {
-//            perror("setsockopt reuseaddr failed");
-//            exit(EXIT_FAILURE);
-//        }
-//
-//        struct in_addr localInterface{};
-//        localInterface.s_addr = htonl(INADDR_ANY);
-//        if (setsockopt(output_sock, IPPROTO_IP, IP_MULTICAST_IF, (char *) &localInterface, sizeof(localInterface)) <
-//            0) {
-//            perror("setting local interface");
-//            exit(1);
-//        }
     }
 
     struct pollfd fd{
@@ -221,13 +195,10 @@ int main(int argc, char **argv) {
             }
 
             char host[INET6_ADDRSTRLEN];
-            std::string ip;
-
             inet_ntop(AF_INET6, &(client_addr.sin6_addr), host, INET6_ADDRSTRLEN);
-            ip = host;
 
             updated = updated || !db.exists(token);
-            db.add(ip, token);
+            db.add(host, token);
         } else {
             send_info_about_me(my_token, output_sock, reinterpret_cast<sockaddr *>(&broadcast_addr),
                                sizeof(broadcast_addr));
