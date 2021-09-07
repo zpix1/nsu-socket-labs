@@ -11,15 +11,14 @@
 #include <netdb.h>
 #include <unordered_map>
 #include <algorithm>
-#include <sys/fcntl.h>
-#include <iomanip>
+#include <random>
 
 const int remove_timeout = 5;
 
 #define PORT     8080
 #define MAXLINE 1024
 
-namespace stuff {
+namespace erase_if_fill {
     template<typename ContainerT, typename PredicateT>
     void erase_if(ContainerT& items, const PredicateT& predicate) {
         for (auto it = items.begin(); it != items.end();) {
@@ -36,7 +35,7 @@ void send_info_about_me(const std::string& info, int sockfd, struct sockaddr *cl
 
 class DB {
     struct Entry {
-        time_t last_seen;
+        time_t last_seen = 0;
         std::string ip;
         std::string token;
     };
@@ -53,9 +52,9 @@ public:
     }
 
     bool clear() {
-        const int before = map.size();
-        const time_t now = time(0);
-        stuff::erase_if(map, [&now](const auto& item) {
+        const size_t before = map.size();
+        const time_t now = time(nullptr);
+        erase_if_fill::erase_if(map, [&now](const auto& item) {
             return now - item.second.last_seen >= remove_timeout;
         });
         return map.size() != before;
@@ -67,10 +66,9 @@ public:
         printf("------------------------------------------------------------\n");
 
         for (const auto& res: map) {
-
             char buffer[100];
-            const auto timeinfo = localtime(&res.second.last_seen);
-            strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
+            const auto time_info = localtime(&res.second.last_seen);
+            strftime(buffer, sizeof(buffer), "%H:%M:%S", time_info);
             std::string timeStr(buffer);
             printf("%-20s %-20s %-20s\n", res.second.token.c_str(), res.second.ip.c_str(), buffer);
         }
@@ -83,42 +81,44 @@ public:
 
 int main(int argc, char **argv) {
     DB db{};
-    srand(time(0));
+    srand(time(nullptr));
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<int> uni(1000000, 9999999);
 
-    const std::string MYSELF_ID = "UID-" + std::to_string(rand());
-    std::cout << "MYSELF_ID is " << MYSELF_ID << std::endl;
+    const std::string my_token = "UID-" + std::to_string(uni(rng));
+    std::cout << "My token: " << my_token << std::endl;
 
     int input_sock, output_sock;
-    int trueflag = 1;
-    int falseflag = 0;
+    int true_flag = 1;
+    int false_flag = 0;
     {
-        if ((input_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        if ((input_sock = socket(AF_INET6, SOCK_DGRAM, 0)) < 0) {
             perror("socket creation failed");
             exit(EXIT_FAILURE);
         }
 
-        if (setsockopt(input_sock, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
+        if (setsockopt(input_sock, SOL_SOCKET, SO_REUSEADDR, &true_flag, sizeof true_flag) < 0) {
             perror("setsockopt reuseaddr failed");
             exit(EXIT_FAILURE);
         }
 
-        if (setsockopt(input_sock, SOL_SOCKET, SO_REUSEPORT, &trueflag, sizeof trueflag) < 0) {
+        if (setsockopt(input_sock, SOL_SOCKET, SO_REUSEPORT, &true_flag, sizeof true_flag) < 0) {
             perror("setsockopt resuseport failed");
             exit(EXIT_FAILURE);
         }
 
-        struct sockaddr_in servaddr{};
-        servaddr.sin_family = AF_INET;
-        servaddr.sin_port = htons(PORT);
-        servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        if (bind(input_sock, (const struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+        struct sockaddr_in6 server_addr{};
+        server_addr.sin6_family = AF_INET;
+        server_addr.sin6_port = htons(PORT);
+        server_addr.sin6_addr = in6addr_any;
+        if (bind(input_sock, (const struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
             perror("bind failed");
             exit(EXIT_FAILURE);
         }
-
-        struct ip_mreq mreq{};
-        mreq.imr_multiaddr.s_addr = inet_addr(argv[1]);
-        mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+        struct ipv6_mreq mreq{};
+        mreq.ipv6mr_multiaddr = inet_addr(argv[1]);
+        mreq.ipv6mr_interface = in6addr_any;
         if (setsockopt(input_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
             perror("IP_ADD_MEMBERSHIP failed");
             exit(EXIT_FAILURE);
@@ -126,27 +126,27 @@ int main(int argc, char **argv) {
     }
 
 
-    struct sockaddr_in broadcastaddr{};
-    broadcastaddr.sin_family = AF_INET;
-    broadcastaddr.sin_addr.s_addr = inet_addr(argv[1]);
-    broadcastaddr.sin_port = htons(PORT);
+    struct sockaddr_in broadcast_addr{};
+    broadcast_addr.sin_family = AF_INET;
+    broadcast_addr.sin_addr.s_addr = inet_addr(argv[1]);
+    broadcast_addr.sin_port = htons(PORT);
     {
         if ((output_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
             perror("output socket creation failed");
             exit(EXIT_FAILURE);
         }
 
-//        if (setsockopt(output_sock, SOL_SOCKET, SO_REUSEADDR, &trueflag, sizeof trueflag) < 0) {
+//        if (setsockopt(output_sock, SOL_SOCKET, SO_REUSEADDR, &true_flag, sizeof true_flag) < 0) {
 //            perror("setsockopt reuseaddr failed");
 //            exit(EXIT_FAILURE);
 //        }
 //
-//        if (setsockopt(output_sock, SOL_SOCKET, SO_REUSEPORT, &trueflag, sizeof trueflag) < 0) {
+//        if (setsockopt(output_sock, SOL_SOCKET, SO_REUSEPORT, &true_flag, sizeof true_flag) < 0) {
 //            perror("setsockopt resuseport failed");
 //            exit(EXIT_FAILURE);
 //        }
 //
-//        if (setsockopt(output_sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *) &falseflag, sizeof(falseflag)) < 0) {
+//        if (setsockopt(output_sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *) &false_flag, sizeof(false_flag)) < 0) {
 //            perror("setsockopt reuseaddr failed");
 //            exit(EXIT_FAILURE);
 //        }
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
             .events = POLLIN
     };
 
-    send_info_about_me(MYSELF_ID, output_sock, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
+    send_info_about_me(my_token, output_sock, reinterpret_cast<sockaddr *>(&broadcast_addr), sizeof(broadcast_addr));
 
     do {
         bool updated;
@@ -184,10 +184,10 @@ int main(int argc, char **argv) {
             }
 
             char buffer[MAXLINE];
-            struct sockaddr_in cliaddr{};
-            const int len = sizeof(cliaddr);
+            struct sockaddr_in client_addr{};
+            const int len = sizeof(client_addr);
 
-            ssize_t read = recvfrom(input_sock, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr,
+            ssize_t read = recvfrom(input_sock, (char *) buffer, MAXLINE, MSG_WAITALL, (struct sockaddr *) &client_addr,
                                     (socklen_t *) &len);
 
             if (read < 0) {
@@ -198,27 +198,24 @@ int main(int argc, char **argv) {
             buffer[read] = '\0';
             std::string token = buffer;
 
-            if (token == MYSELF_ID) {
+            if (token == my_token) {
                 continue;
             }
 
             char host[NI_MAXHOST];
             std::string ip;
-            if (getnameinfo((sockaddr *) &cliaddr, len,
-                            host, NI_MAXHOST, // to try to get domain name don't put NI_NUMERICHOST flag
-                            nullptr, 0,          // use char serv[NI_MAXSERV] if you need port number
-                            NI_NUMERICHOST    // | NI_NUMERICSERV
-            ) != 0) {
+            if (getnameinfo((sockaddr *) &client_addr, len, host, NI_MAXHOST, nullptr, 0, NI_NUMERICHOST) != 0) {
                 perror("getnameinfo");
                 exit(EXIT_FAILURE);
             } else {
-                ip += std::string(host);
+                ip = std::string(host);
             }
 
             updated = updated || !db.exists(token);
             db.add(ip, token);
         } else {
-            send_info_about_me(MYSELF_ID, output_sock, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
+            send_info_about_me(my_token, output_sock, reinterpret_cast<sockaddr *>(&broadcast_addr),
+                               sizeof(broadcast_addr));
         }
 
         if (updated) {
@@ -228,6 +225,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
-
-
