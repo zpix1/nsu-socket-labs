@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <sys/fcntl.h>
+#include <iomanip>
 
 const int remove_timeout = 5;
 
@@ -34,33 +35,49 @@ void send_info_about_me(const std::string& info, int sockfd, struct sockaddr *cl
 }
 
 class DB {
-    std::unordered_map<std::string, time_t> map;
+    struct Entry {
+        time_t last_seen;
+        std::string ip;
+        std::string token;
+    };
+    std::unordered_map<std::string, Entry> map;
 
 public:
-    void add(const std::string& s) {
-        map[s] = time(0);
+    void add(const std::string& ip, const std::string& token) {
+        Entry e{
+                time(nullptr),
+                ip,
+                token
+        };
+        map[token] = e;
     }
 
     bool clear() {
         const int before = map.size();
         const time_t now = time(0);
         stuff::erase_if(map, [&now](const auto& item) {
-            return now - item.second >= remove_timeout;
+            return now - item.second.last_seen >= remove_timeout;
         });
-//        std::cout << "before: " << before << " " << "after: " << map.size() << std::endl;
         return map.size() != before;
     }
 
     void print() {
-        std::cout << "[" << std::endl;
+        system("clear");
+        printf("%-20s %-20s %-20s\n", "Token", "IP", "First seen");
+        printf("------------------------------------------------------------\n");
+
         for (const auto& res: map) {
-            std::cout << "\t" << res.first << " = " << res.second << "," << std::endl;
+
+            char buffer[100];
+            const auto timeinfo = localtime(&res.second.last_seen);
+            strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
+            std::string timeStr(buffer);
+            printf("%-20s %-20s %-20s\n", res.second.token.c_str(), res.second.ip.c_str(), buffer);
         }
-        std::cout << "]" << std::endl;
     }
 
-    bool exists(const std::string& s) {
-        return map.find(s) != map.end();
+    bool exists(const std::string& token) {
+        return map.find(token) != map.end();
     }
 };
 
@@ -179,13 +196,14 @@ int main(int argc, char **argv) {
             }
 
             buffer[read] = '\0';
-            std::string client_data = buffer;
-            if (client_data == MYSELF_ID) {
-//                std::cout << "already me" << std::endl;
+            std::string token = buffer;
+
+            if (token == MYSELF_ID) {
                 continue;
             }
 
             char host[NI_MAXHOST];
+            std::string ip;
             if (getnameinfo((sockaddr *) &cliaddr, len,
                             host, NI_MAXHOST, // to try to get domain name don't put NI_NUMERICHOST flag
                             nullptr, 0,          // use char serv[NI_MAXSERV] if you need port number
@@ -194,16 +212,13 @@ int main(int argc, char **argv) {
                 perror("getnameinfo");
                 exit(EXIT_FAILURE);
             } else {
-                client_data += "-" + std::string(host);
+                ip += std::string(host);
             }
 
-//            std::cout << "got info: " << client_data << ":" << cliaddr.sin_port << std::endl;
-            updated = updated || !db.exists(client_data);
-            db.add(client_data);
+            updated = updated || !db.exists(token);
+            db.add(ip, token);
         } else {
-//            printf("timeout\n");
-            send_info_about_me(MYSELF_ID, output_sock, reinterpret_cast<sockaddr *>(&broadcastaddr),
-                               sizeof(broadcastaddr));
+            send_info_about_me(MYSELF_ID, output_sock, reinterpret_cast<sockaddr *>(&broadcastaddr), sizeof(broadcastaddr));
         }
 
         if (updated) {
