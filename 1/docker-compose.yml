@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  app1:
+    build: .
+    network_mode: host
+  app2:
+    build: .
+    network_mode: host
+  app3:
+    build: .
+    network_mode: host

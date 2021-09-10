@@ -1,10 +1,5 @@
-//
-// Created by Иван Бакшеев on 07.09.2021.
-//
-
 #ifndef LAB1_SHARED_H
 #define LAB1_SHARED_H
-
 
 const int remove_timeout = 5;
 
@@ -59,11 +54,9 @@ public:
         printf("------------------------------------------------------------\n");
 
         for (const auto& res: map) {
-
             char buffer[100];
-            const auto timeinfo = localtime(&res.second.last_seen);
-            strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
-            std::string timeStr(buffer);
+            const auto time_info = localtime(&res.second.last_seen);
+            strftime(buffer, sizeof(buffer), "%H:%M:%S", time_info);
             printf("%-20s %-20s %-20s\n", res.second.token.c_str(), res.second.ip.c_str(), buffer);
         }
     }
