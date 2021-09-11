@@ -10,9 +10,10 @@ void perror_fail_if(const int result, const char *message) {
     }
 }
 
-void fail_if(const bool value, const char* message) {
-    if (!value) {
+void fail_if(const bool failure, const char* message) {
+    if (failure) {
         std::cerr << message << ": error" << std::endl;
+        exit(EXIT_FAILURE);
     }
 }
 

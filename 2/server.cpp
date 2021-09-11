@@ -4,27 +4,43 @@
 #include <filesystem>
 #include <thread>
 #include <chrono>
-
-using namespace std::chrono;
+#include <mutex>
+#include <condition_variable>
 
 #include "utils.h"
 #include "config.h"
+
+using namespace std::chrono;
 
 namespace fs = std::filesystem;
 
 struct FileLoadingState {
     const std::string filename;
     const milliseconds started_at;
-    volatile uint64_t loaded_bytes;
+    uint64_t loaded_bytes;
     const uint64_t filesize;
-    volatile bool done = false;
+    bool done = false;
+    std::mutex cv_m;
+    std::condition_variable cv;
 };
 
-void log_file_loading(const FileLoadingState& state) {
+void log_state(const FileLoadingState *state) {
+    std::cout << "[" << state->filename << "]: ";
+    if (state->done) {
+        std::cout << "done";
+    } else {
+        std::cout << state->loaded_bytes << " / " << state->filesize;
+    }
+    std::cout << std::endl;
+}
+
+void log_file_loading(FileLoadingState *state) {
     using namespace std::chrono_literals;
-    while (!state.done) {
-        std::cout << "[" << state.filename << "]: " << state.loaded_bytes << " / " << state.filesize << std::endl;
-        std::this_thread::sleep_for(3s);
+    log_state(state);
+    while (!state->done) {
+        std::unique_lock<std::mutex> lk(state->cv_m);
+        state->cv.wait_for(lk, 3s, [&state] { return state->done; });
+        log_state(state);
     }
 }
 
@@ -68,24 +84,31 @@ bool download_file_from_socket(const int socket_fd) {
             .done=false
     };
 
-    auto log_thread = std::thread(log_file_loading, state);
+    auto log_thread = std::thread(log_file_loading, &state);
 
     char buf[BUF_SIZE];
+    bool result = false;
     while (!state.done) {
         ssize_t part_read_bytes = recv(socket_fd, buf, BUF_SIZE, 0);
         if (part_read_bytes < 0) {
+            result = false;
             state.done = true;
-            log_thread.join();
             perror("part reading from socket");
-            return false;
+            break;
         }
         state.loaded_bytes += part_read_bytes;
         if (state.loaded_bytes == state.filesize) {
+            result = true;
+            state.done = true;
             break;
         }
     }
 
-    return true;
+    state.done = true;
+    state.cv.notify_all();
+    log_thread.join();
+
+    return result;
 }
 
 int main(int argc, char **argv) {
@@ -124,8 +147,7 @@ int main(int argc, char **argv) {
             perror("accept connection");
             break;
         }
-        std::thread file_load_thread(download_file_from_socket, client_socket_fd);
-        file_load_thread.detach();
+        std::thread(download_file_from_socket, client_socket_fd).detach();
     }
 
     return EXIT_SUCCESS;

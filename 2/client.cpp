@@ -10,7 +10,6 @@
 #include "config.h"
 
 int main(int argc, char **argv) {
-    sleep(2);
     if (argc != 4) {
         std::cout << "Usage: ./client test_file 192.168.1.7 8080" << std::endl;
         exit(EXIT_FAILURE);
@@ -23,9 +22,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    std::cout << inet_ntoa(hostname->h_addr);
-
-    const unsigned short port = std::atoi(argv[2]);
+    const unsigned short port = std::atoi(argv[3]);
 
     struct sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
@@ -39,6 +36,7 @@ int main(int argc, char **argv) {
     filesize_t filesize = 100 * BUF_SIZE;
     char filename[] = "memes";
 
+//    std::cerr << send(socket_fd, &filesize, sizeof(filesize), 0) << " " << sizeof(filesize) << std::endl;
     fail_if(send(socket_fd, &filesize, sizeof(filesize), 0) != sizeof(filesize), "sending filesize");
     fail_if(send(socket_fd, filename, sizeof(filename), 0) != sizeof(filename), "sending filesize");
 
