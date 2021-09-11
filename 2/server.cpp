@@ -151,8 +151,8 @@ bool download_file_from_socket(const int socket_fd) {
     std::ofstream ofs(filepath);
 
     char buf[BUF_SIZE];
-    bool result;
-    while (true) {
+    bool result = true;
+    while (state.loaded_bytes != state.filesize) {
         ssize_t part_read_bytes = recv(socket_fd, buf, BUF_SIZE, 0);
 
         if (part_read_bytes < 0) {
