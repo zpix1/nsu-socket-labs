@@ -2,37 +2,95 @@
 #include <netdb.h>
 #include <cstdio>
 #include <filesystem>
+#include <thread>
+#include <chrono>
+
+using namespace std::chrono;
+
 #include "utils.h"
 #include "config.h"
 
 namespace fs = std::filesystem;
 
+struct FileLoadingState {
+    const std::string filename;
+    const milliseconds started_at;
+    volatile uint64_t loaded_bytes;
+    const uint64_t filesize;
+    volatile bool done = false;
+};
+
+void log_file_loading(const FileLoadingState& state) {
+    using namespace std::chrono_literals;
+    while (!state.done) {
+        std::cout << "[" << state.filename << "]: " << state.loaded_bytes << " / " << state.filesize << std::endl;
+        std::this_thread::sleep_for(3s);
+    }
+}
+
 bool download_file_from_socket(const int socket_fd) {
-    char filename[MAX_FILENAME_SIZE];
-    ssize_t read_bytes;
-    if ((read_bytes = recv(socket_fd, filename, MAX_FILENAME_SIZE, 0)) < 0) {
-        perror("filename reading from socket");
+    uint64_t filesize;
+    ssize_t filesize_read_bytes;
+    if ((filesize_read_bytes = recv(socket_fd, &filesize, sizeof(filesize), 0)) < 0) {
+        perror("filesize reading from socket");
+        return false;
+    }
+    if (filesize_read_bytes != sizeof(filesize)) {
+        std::cerr << "failed to read filesize" << std::endl;
         return false;
     }
 
-    if (read_bytes == 0) {
+    char filename[MAX_FILENAME_SIZE];
+    ssize_t filename_read_bytes;
+    if ((filename_read_bytes = recv(socket_fd, filename, MAX_FILENAME_SIZE, 0)) < 0) {
+        perror("filename reading from socket");
+        return false;
+    }
+    if (filename_read_bytes == 0) {
         std::cerr << "empty filename read" << std::endl;
         return false;
     }
 
-    std::cout << "read filename " << filename << std::endl;
+    std::cout << "read filename " << filename << " of size " << filesize << std::endl;
 
     if (send(socket_fd, SERVER_READY_REPLY, sizeof(SERVER_READY_REPLY), 0) < 0) {
         perror("server ready reply sending to socket");
         return false;
     }
 
+    FileLoadingState state{
+            .filename=filename,
+            .started_at=std::chrono::duration_cast<milliseconds>(
+                    system_clock::now().time_since_epoch()
+            ),
+            .loaded_bytes=0,
+            .filesize=filesize,
+            .done=false
+    };
 
+    auto log_thread = std::thread(log_file_loading, state);
+
+    char buf[BUF_SIZE];
+    while (!state.done) {
+        ssize_t part_read_bytes = recv(socket_fd, buf, BUF_SIZE, 0);
+        if (part_read_bytes < 0) {
+            state.done = true;
+            log_thread.join();
+            perror("part reading from socket");
+            return false;
+        }
+        state.loaded_bytes += part_read_bytes;
+        if (state.loaded_bytes == state.filesize) {
+            break;
+        }
+    }
+
+    return true;
 }
 
 int main(int argc, char **argv) {
     if (argc != 2) {
-        std::cout << "Usage: ./server_addr 8080" << std::endl;
+        std::cout << "Usage: ./server 8080" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -66,6 +124,8 @@ int main(int argc, char **argv) {
             perror("accept connection");
             break;
         }
+        std::thread file_load_thread(download_file_from_socket, client_socket_fd);
+        file_load_thread.detach();
     }
 
     return EXIT_SUCCESS;
