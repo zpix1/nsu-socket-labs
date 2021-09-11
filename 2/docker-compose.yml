@@ -1,9 +1,14 @@
 version: "3.9"
 
 services:
-  client:
+  client1:
     build: .
-    entrypoint: [ "./client", "CMakeLists.txt", "server", "8080" ]
+    entrypoint: [ "./client", "/app/CMakeLists.txt", "server", "8080" ]
+    depends_on:
+      - server
+  client2:
+    build: .
+    entrypoint: [ "./client", "/app/CMakeLists.txt", "server", "8080" ]
     depends_on:
       - server
   server:

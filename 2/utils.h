@@ -34,4 +34,20 @@ const char *humanSize(uint64_t bytes) {
     return output;
 }
 
+bool is_valid_filename(const std::string& str) {
+    if (str.find('/') != std::string::npos) {
+        return false;
+    }
+    if (str.find("..") != std::string::npos) {
+        return false;
+    }
+    if (str.empty()) {
+        return false;
+    }
+    if (str.size() > FILENAME_MAX) {
+        return false;
+    }
+    return true;
+}
+
 #endif //INC_2_UTILS_H
