@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
     perror_fail_if(socket_fd = socket(AF_INET, SOCK_STREAM, 0), "socket creating");
     perror_fail_if(connect(socket_fd, (sockaddr *) &server_addr, sizeof(server_addr)), "socket connecting");
 
-    filesize_t filesize = 100 * BUF_SIZE;
+    filesize_t filesize = 1000000 * BUF_SIZE;
     char filename[] = "memes";
 
 //    std::cerr << send(socket_fd, &filesize, sizeof(filesize), 0) << " " << sizeof(filesize) << std::endl;
@@ -44,9 +44,10 @@ int main(int argc, char **argv) {
     fail_if(recv(socket_fd, reply_buf, sizeof(reply_buf), 0) != sizeof(reply_buf), "reading reply");
     fail_if(std::string(reply_buf) != SERVER_READY_REPLY, ("invalid reply: " + std::string(reply_buf)).c_str());
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 1000000; i++) {
         char buf[BUF_SIZE] = {};
         fail_if(send(socket_fd, buf, sizeof(buf), 0) != sizeof(buf), "sending part");
+//        sleep(1);
     }
 
     return EXIT_SUCCESS;

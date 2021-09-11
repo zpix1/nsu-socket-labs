@@ -17,30 +17,53 @@ namespace fs = std::filesystem;
 struct FileLoadingState {
     const std::string filename;
     const milliseconds started_at;
+    milliseconds last_log_at;
     uint64_t loaded_bytes;
+    uint64_t last_log_loaded_bytes;
     const uint64_t filesize;
     bool done = false;
     std::mutex cv_m;
     std::condition_variable cv;
 };
 
-void log_state(const FileLoadingState *state) {
+milliseconds now() {
+    return std::chrono::duration_cast<milliseconds>(
+            system_clock::now().time_since_epoch()
+    );
+}
+
+void log_state(FileLoadingState *state, bool first_log) {
+    auto current_time = now();
+
     std::cout << "[" << state->filename << "]: ";
-    if (state->done) {
+    if (first_log) {
+        std::cout << "started";
+    } else if (state->done) {
         std::cout << "done";
     } else {
-        std::cout << state->loaded_bytes << " / " << state->filesize;
+        unsigned long long average_speed = state->loaded_bytes * 1000 / (current_time - state->started_at).count();
+        unsigned long long moment_speed = (state->loaded_bytes - state->last_log_loaded_bytes) * 1000 /
+                            (current_time - state->last_log_at).count();
+
+        std::cout << humanSize(state->loaded_bytes) << " / " << humanSize(state->filesize) << ","
+                  << std::fixed
+                  << std::setprecision(2)
+                  << " total speed: " << humanSize(average_speed)
+                  << "/s, moment speed: " << humanSize(moment_speed) << "/s";
     }
     std::cout << std::endl;
+
+    state->last_log_loaded_bytes = state->loaded_bytes;
+    state->last_log_at = current_time;
 }
 
 void log_file_loading(FileLoadingState *state) {
     using namespace std::chrono_literals;
-    log_state(state);
+    log_state(state, true);
     while (!state->done) {
         std::unique_lock<std::mutex> lk(state->cv_m);
         state->cv.wait_for(lk, 3s, [&state] { return state->done; });
-        log_state(state);
+        log_state(state, false);
     }
 }
 
@@ -67,7 +90,7 @@ bool download_file_from_socket(const int socket_fd) {
         return false;
     }
 
-    std::cout << "read filename " << filename << " of size " << filesize << std::endl;
+//    std::cout << "read filename " << filename << " of size " << filesize << std::endl;
 
     if (send(socket_fd, SERVER_READY_REPLY, sizeof(SERVER_READY_REPLY), 0) < 0) {
         perror("server ready reply sending to socket");
@@ -76,10 +99,10 @@ bool download_file_from_socket(const int socket_fd) {
 
     FileLoadingState state{
             .filename=filename,
-            .started_at=std::chrono::duration_cast<milliseconds>(
-                    system_clock::now().time_since_epoch()
-            ),
+            .started_at=now(),
+            .last_log_at=now(),
             .loaded_bytes=0,
+            .last_log_loaded_bytes=0,
             .filesize=filesize,
             .done=false
     };
