@@ -6,4 +6,6 @@
 #define SERVER_READY_REPLY "CONTINUE"
 #define BUF_SIZE 1024
 
+using filesize_t = uint64_t;
+
 #endif //INC_2_CONFIG_H

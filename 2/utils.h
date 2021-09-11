@@ -3,10 +3,16 @@
 
 #include <cstdlib>
 
-void fail_if(const int result, const char *message) {
+void perror_fail_if(const int result, const char *message) {
     if (result < 0) {
         perror(message);
         exit(EXIT_FAILURE);
+    }
+}
+
+void fail_if(const bool value, const char* message) {
+    if (!value) {
+        std::cerr << message << ": error" << std::endl;
     }
 }
 

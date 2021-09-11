@@ -102,17 +102,17 @@ int main(int argc, char **argv) {
     const unsigned short port = std::atoi(argv[1]);
 
     int accept_socket_fd;
-    fail_if(accept_socket_fd = socket(AF_INET, SOCK_STREAM, 0),
-            "create accept socket");
+    perror_fail_if(accept_socket_fd = socket(AF_INET, SOCK_STREAM, 0),
+                   "create accept socket");
 
     struct sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    fail_if(bind(accept_socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)),
-            "bind accept socket");
+    perror_fail_if(bind(accept_socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)),
+                   "bind accept socket");
 
-    fail_if(listen(accept_socket_fd, 32), "listen accept socket");
+    perror_fail_if(listen(accept_socket_fd, 32), "listen accept socket");
 
     struct sockaddr_in client_addr{};
     const auto name_len = sizeof(client_addr);
