@@ -9,6 +9,3 @@ docker-compose exec server bash
 cd uploads
 ls
 ```
-
-## demo
-[![asciicast](https://asciinema.org/a/M3fB1ASfrpMS09mNYig5E2xG7.png)](https://asciinema.org/a/M3fB1ASfrpMS09mNYig5E2xG7)
