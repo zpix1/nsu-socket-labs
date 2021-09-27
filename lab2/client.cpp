@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     size_t read;
     while ((read = fread(buf, 1, BUF_SIZE, f)) > 0) {
         fail_if(send(socket_fd, buf, read, 0) != read, "sending part");
-        sleep(rand() % 3);
+//        sleep(rand() % 3);
     }
 
     char end_reply_buf[sizeof(SERVER_END_REPLY)];
