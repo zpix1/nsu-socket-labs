@@ -1,25 +1,25 @@
 package ru.nsu.fit.ibaksheev.game;
 
-import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.core.ObservableOnSubscribe;
-import io.reactivex.rxjava3.processors.PublishProcessor;
-import io.reactivex.rxjava3.schedulers.Schedulers;
-import io.reactivex.rxjava3.subjects.PublishSubject;
-import io.reactivex.rxjava3.subjects.Subject;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.Getter;
-import me.ippolitov.fit.snakes.SnakesProto;
-import me.ippolitov.fit.snakes.SnakesProto.*;
+import lombok.Setter;
+import me.ippolitov.fit.snakes.SnakesProto.GameMessage;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class UnicastMsgManager {
+    private final static int NODE_TIMEOUT_MS = 5000;
+
     @AllArgsConstructor
     public static class GameMessageWrapper {
         @Getter
@@ -28,42 +28,98 @@ public class UnicastMsgManager {
         private String senderIp;
         @Getter
         private int senderPort;
+        @Getter
+        @Setter
+        private long sentAt;
     }
 
-    private final Set<GamePlayer> activePlayers = new HashSet<>();
+    private int listenPort;
+    private DatagramSocket sendSocket;
+    private DatagramSocket receiveSocket;
 
-    // listen for any GameMessages on port, send Acks for each received message
-    public Observable<GameMessageWrapper> getMessageListener(int port) {
-        ObservableOnSubscribe<GameMessageWrapper> handler = emitter -> {
-            var receiveSocket = new DatagramSocket(port);
-            var sendSocket = new DatagramSocket();
-            byte[] receiveBuffer = new byte[GameMessage.getDefaultInstance().getSerializedSize()];
-            while (true) {
-                var receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+    private final BlockingQueue<GameMessageWrapper> sendQueue = new LinkedBlockingQueue<>();
+    private final List<GameMessageWrapper> sentList = new ArrayList<>();
+
+    private static final Logger logger = Logger.getLogger(UnicastMsgManager.class.getName());
+
+    public UnicastMsgManager(int listenPort) throws SocketException {
+        this.listenPort = listenPort;
+        this.sendSocket = new DatagramSocket();
+        this.receiveSocket = new DatagramSocket(listenPort);
+    }
+
+    public void sendPacket(GameMessageWrapper wrapper) {
+        sendQueue.add(wrapper);
+    }
+
+    private void receiveWorker() {
+        byte[] receiveBuffer = new byte[GameMessage.getDefaultInstance().getSerializedSize()];
+        while (true) {
+            var receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+            try {
                 receiveSocket.receive(receivePacket);
                 var gameMessage = GameMessage.parseFrom(receivePacket.getData());
-                var sendData = GameMessage.newBuilder()
-                        .setAck(GameMessage.AckMsg.getDefaultInstance())
-                        .setMsgSeq(gameMessage.getMsgSeq())
-                        .build()
-                        .toByteArray();
-                var ackPacket = new DatagramPacket(sendData, sendData.length, receivePacket.getAddress(), receivePacket.getPort());
-                sendSocket.send(ackPacket);
-                emitter.onNext(new GameMessageWrapper(
-                        gameMessage,
-                        receivePacket.getAddress().toString(),
-                        receivePacket.getPort()
-                ));
+                if (gameMessage.hasAck()) {
+                    synchronized (sentList) {
+                        var elem = sentList.stream()
+                                .filter(wrapper -> wrapper.getMessage().getMsgSeq() == gameMessage.getMsgSeq())
+                                .findAny();
+                        if (elem.isPresent()) {
+                            sentList.remove(elem.get());
+                        } else {
+                            logger.log(Level.WARNING, "got ack to non-existent packet");
+                        }
+                    }
+                } else {
+                    var ackData = GameMessage.newBuilder()
+                            .setAck(GameMessage.AckMsg.getDefaultInstance())
+                            .setMsgSeq(gameMessage.getMsgSeq())
+                            .build()
+                            .toByteArray();
+                    var ackPacket = new DatagramPacket(ackData, ackData.length, receivePacket.getAddress(), receivePacket.getPort());
+                    sendSocket.send(ackPacket);
+                }
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, e.getLocalizedMessage());
             }
-        };
-        return Observable.create(handler).subscribeOn(Schedulers.io());
+        }
     }
 
-    public PublishProcessor<GameMessageWrapper> getMessagePublisher() {
-        PublishProcessor<GameMessageWrapper> processor = PublishProcessor.create();
-        processor.observeOn(Schedulers.io())
-                .doAfterNext(e -> System.out.println(e.getSenderIp()))
-                .subscribe();
-        return processor;
+    private void ackCheckWorker() {
+        while (true) {
+            try {
+                Thread.sleep(NODE_TIMEOUT_MS);
+            } catch (InterruptedException e) {
+                break;
+            }
+            var currentTime = System.currentTimeMillis();
+            synchronized (sentList) {
+                sentList.stream().filter(wrapper -> currentTime - wrapper.getSentAt() > NODE_TIMEOUT_MS).forEach(wrapper -> {
+                    sendQueue.add(wrapper);
+                    sentList.remove(wrapper);
+                });
+            }
+        }
+    }
+
+    private void sendWorker() {
+        while (true) {
+            var wrapper = sendQueue.poll();
+            if (wrapper != null) {
+                var sendData = wrapper.getMessage().toByteArray();
+                try {
+                    var packet = new DatagramPacket(sendData, sendData.length, InetAddress.getByName(wrapper.getSenderIp()), wrapper.getSenderPort());
+                    wrapper.setSentAt(System.currentTimeMillis());
+                    sendSocket.send(packet);
+                    synchronized (sentList) {
+                        sentList.add(wrapper);
+                    }
+                } catch (IOException e) {
+                    logger.log(Level.SEVERE, e.getLocalizedMessage());
+                }
+            } else {
+                logger.log(Level.SEVERE, "got null message in send queue");
+            }
+        }
     }
 }

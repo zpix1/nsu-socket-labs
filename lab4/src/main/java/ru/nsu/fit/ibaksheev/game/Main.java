@@ -8,6 +8,7 @@ public class Main {
         var msg = m.getMessagePublisher();
         System.out.println("before emit");
         msg.offer(new UnicastMsgManager.GameMessageWrapper(null, "kek", 123));
+        msg.offer(new UnicastMsgManager.GameMessageWrapper(null, "mem", 123));
         System.out.println("after emit");
         Thread.sleep(20000);
     }
