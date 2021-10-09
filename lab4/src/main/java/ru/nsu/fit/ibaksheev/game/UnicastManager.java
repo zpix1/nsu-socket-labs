@@ -17,8 +17,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class NetManager {
-    private final static int NODE_TIMEOUT_MS = 5000;
+public class UnicastManager {
     private final static int ACK_CHECK_MS = 2000;
     private final static int BUF_SIZE = 65000;
 
@@ -36,6 +35,9 @@ public class NetManager {
         @Getter
         @Setter
         private Long sentAt;
+        @Getter
+        @Setter
+        private int retryCount = 3;
     }
 
     @Builder
@@ -55,13 +57,13 @@ public class NetManager {
     private final BlockingQueue<ReceivedMessageWrapper> receiveQueue = new LinkedBlockingQueue<>();
     private final List<ToSendMessageWrapper> sentList = new ArrayList<>();
 
-    private static final Logger logger = Logger.getLogger(NetManager.class.getName());
+    private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
     private final Thread sendWorkerThread;
     private final Thread receiveWorkerThread;
     private final Thread ackCheckWorkerThread;
 
-    public NetManager(int listenPort) throws SocketException {
+    public UnicastManager(int listenPort) throws SocketException {
         this.socket = new DatagramSocket(listenPort);
 
         sendWorkerThread = new Thread(this::sendWorker);
@@ -129,10 +131,15 @@ public class NetManager {
             }
             var currentTime = System.currentTimeMillis();
             synchronized (sentList) {
-                sentList.stream().filter(wrapper -> currentTime - wrapper.getSentAt() > ACK_CHECK_MS).forEach(wrapper -> {
-                    logger.warning("Got packet without ack, resending");
-                    sendQueue.add(wrapper);
-                });
+                sentList.stream()
+                        .filter(wrapper -> currentTime - wrapper.getSentAt() > ACK_CHECK_MS)
+                        .forEach(wrapper -> {
+                            if (wrapper.getRetryCount() > 0) {
+                                wrapper.setRetryCount(wrapper.getRetryCount() - 1);
+                                logger.warning("Got packet without ack, resending, retry n. " + wrapper.getRetryCount());
+                                sendQueue.add(wrapper);
+                            }
+                        });
                 sentList.removeIf(wrapper -> currentTime - wrapper.getSentAt() > ACK_CHECK_MS);
             }
         }
@@ -154,7 +161,12 @@ public class NetManager {
             wrapper.setSentAt(System.currentTimeMillis());
 
             try {
-                var packet = new DatagramPacket(sendData, sendData.length, InetAddress.getByName(wrapper.getIp()), wrapper.getPort());
+                var packet = new DatagramPacket(
+                        sendData,
+                        sendData.length,
+                        InetAddress.getByName(wrapper.getIp()),
+                        wrapper.getPort()
+                );
 
                 synchronized (sentList) {
                     sentList.add(wrapper);
