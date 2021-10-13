@@ -1,0 +1,1 @@
+export const GRAPHHOPPER_API_KEY = '0875266e-e97d-4271-8c05-c0429e6e3355';
