@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { PlaceProvider } from './components/PlaceProvider';
+import { PlaceCard } from './components/PlaceCard';
 
 export const App = () => {
   const [query, setQuery] = useState('');
 
   return (
-    <div className="text-center max-w-md mx-auto mt-5">
+    <div className="text-center max-w-4xl mx-auto mt-5">
       <div className="text-3xl">
         Place Info Getter
       </div>
@@ -22,9 +23,13 @@ export const App = () => {
             if (isLoading) {
               return <div>Loading...</div>;
             } else  {
-              return <>{places.map((place, i) => {
-                return <div key={i.toString()}>{place.title}</div>;
-              })}</>;
+              return <div className="grid gap-2 flex-wrap sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {places.map((place, i) => {
+                  return (
+                    <PlaceCard key={i.toString()} {...place} />
+                  );
+                })}
+              </div>;
             }
           }}
         </PlaceProvider>

@@ -9,7 +9,7 @@ interface PlaceProviderProps {
   children: (places: Place[], isLoading: boolean, error: Error | null) => JSX.Element;
 }
 
-interface Place {
+export interface Place {
   title?: string;
   description?: string;
   weather?: string;
@@ -28,7 +28,7 @@ const placesObservable = placesSubject.pipe(
   switchMap(query => {
       if (query.length > 1) {
         return fromFetch(
-          `https://graphhopper.com/api/1/geocode?q=${query}&locale=ru&debug=true&key=${GRAPHHOPPER_API_KEY}`
+          `https://graphhopper.com/api/1/geocode?q=${query}&locale=ru&debug=true&key=${GRAPHHOPPER_API_KEY}&limit=100`
         ).pipe(
           switchMap(async response => {
             if (response.ok) {
