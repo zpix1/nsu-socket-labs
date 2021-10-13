@@ -14,7 +14,7 @@ export const App = () => {
         type="text"
         value={query}
         onChange={e => setQuery(e.target.value)}
-        placeholder="enter address"
+        placeholder="Enter address"
       />
       <div className="mt-3">
         <PlaceProvider query={query}>
