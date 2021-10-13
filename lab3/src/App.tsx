@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PlaceProvider } from './components/PlaceProvider';
 
-export default function App() {
+export const App = () => {
   const [query, setQuery] = useState('');
 
   return (
@@ -18,13 +18,13 @@ export default function App() {
       />
       <div className="mt-3">
         <PlaceProvider query={query}>
-          {(places, isLoading, error)  => {
-            if (error) {
-              return <div>Error: {error}</div>;
-            } else if (isLoading) {
+          {(places, isLoading)  => {
+            if (isLoading) {
               return <div>Loading...</div>;
             } else  {
-              return <>{places.map(place => <div>kek</div>)}</>;
+              return <>{places.map((place, i) => {
+                return <div key={i.toString()}>{place.title}</div>;
+              })}</>;
             }
           }}
         </PlaceProvider>
