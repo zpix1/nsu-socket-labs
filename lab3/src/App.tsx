@@ -23,7 +23,7 @@ export const App = () => {
             if (isLoading) {
               return <div>Loading...</div>;
             } else  {
-              return <div className="grid gap-2 flex-wrap sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              return <div className="grid gap-2 auto-rows-fr sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {places.map((place, i) => {
                   return (
                     <PlaceCard key={i.toString()} {...place} />
