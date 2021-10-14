@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { PlaceProvider, Place } from './components/PlaceProvider';
 import { PlaceDataProvider } from './components/PlaceDataProvider';
+import { WeatherProvider } from './components/WeatherProvider';
 
 export const App = () => {
   const [query, setQuery] = useState('');
   const [currentPlace, setCurrentPlace] = useState<Place | null>(null);
 
   return (
-    <div className="text-center max-w-4xl mx-auto mt-5">
+    <div className="text-center max-w-6xl mx-auto mt-5 p-2">
       <div className="text-3xl">
         Place Info Getter
       </div>
@@ -22,8 +23,8 @@ export const App = () => {
         placeholder="Enter address"
       />
       <div className="mt-3">
-        <div className="grid grid-cols-6 gap-2">
-          <div className="rounded col-span-2 bg-white flex flex-col gap-2 p-2">
+        <div className="grid grid-cols-12 gap-2">
+          <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
             <PlaceProvider query={query}>
               {(places, isLoading, error)  => {
                 if (isLoading) {
@@ -46,14 +47,14 @@ export const App = () => {
               }}
             </PlaceProvider>
           </div>
-          <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
+          <div className="rounded col-span-5 bg-white flex flex-col gap-2 p-2">
             {currentPlace &&
                 <>
-                  <div className="font-bold">{currentPlace.title}</div>
+                  <div className="font-bold">What to see here</div>
                   <PlaceDataProvider place={currentPlace}>
                     {(spots, isLoading, error) => {
                       if (error) {
-                        return <div className="red">{error.toString()}</div>
+                        return <div>{error.toString()}</div>
                       } else if (isLoading) {
                         return <div>Loading...</div>;
                       } else {
@@ -86,6 +87,26 @@ export const App = () => {
                   </PlaceDataProvider>
                 </>
             }
+          </div>
+          <div className="rounded col-span-3 bg-white flex flex-col gap-2 p-2">
+            <div className="font-bold">Weather</div>
+            {currentPlace && <WeatherProvider place={currentPlace}>
+              {(weather, isLoading, error) => {
+                if (error) {
+                  return <div>{error.toString()}</div>
+                } else if (isLoading) {
+                  return <div>Loading...</div>;
+                } else {
+                  if (!weather) {
+                    return <div>Enter something</div>;
+                  }
+                  return <div className="flex-col justify-center">
+                    {weather.description}
+                    <img className="mx-auto" src={weather.iconSrc} />
+                  </div>;
+                }
+              }}
+            </WeatherProvider>}
           </div>
         </div>
       </div>
