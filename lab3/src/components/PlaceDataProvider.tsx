@@ -1,32 +1,30 @@
 import { useEffect, useState } from 'react';
-import { BehaviorSubject, startWith, switchMap, filter, of, mergeMap, take, tap, map, mergeAll, toArray, catchError, SchedulerLike, MonoTypeOperatorFunction, Observable, concatMap, asyncScheduler } from 'rxjs';
+import { BehaviorSubject, startWith, switchMap, filter, of, mergeMap, take, tap, map, mergeAll, toArray, catchError, distinctUntilKeyChanged, MonoTypeOperatorFunction, Observable, concatMap, asyncScheduler, distinct, distinctUntilChanged } from 'rxjs';
 import { fromFetch } from 'rxjs/fetch';
 import { OPENTRIPMAP_API_KEY } from '../config';
 import { useRequestObservable, UseRequestObservableResult } from '../utils';
 import { Place } from './PlaceProvider';
 
 interface GoodSpot {
+  id: string;
   name: string;
-}
-
-interface PlaceData {
-  spots: GoodSpot[];
-  weather: string;
+  imageSrc?: string;
+  description?: string;
 }
 
 interface PlaceDataProviderProps {
   place: Place;
-  children: (placeData: PlaceData, isLoading: boolean, error?: Error) => JSX.Element;
+  children: (placeData: GoodSpot[] | null, isLoading: boolean, error: Error | null) => JSX.Element;
 }
 
-type Result = UseRequestObservableResult<PlaceData>;
+type Result = UseRequestObservableResult<GoodSpot[]>;
 
 const placeDataSubject = new BehaviorSubject<Place | null>(null);
 const placeDataObservable = placeDataSubject.pipe(
   filter(place => !!place),
   switchMap(place => {
     return fromFetch(
-      `https://api.opentripmap.com/0.1/ru/places/radius?radius=100&lon=${place!.lng}&lat=${place!.lat}&apikey=${OPENTRIPMAP_API_KEY}`
+      `https://api.opentripmap.com/0.1/ru/places/radius?radius=1000&lon=${place!.lng}&lat=${place!.lat}&apikey=${OPENTRIPMAP_API_KEY}`
     ).pipe(
       mergeMap(response => {
         if (response.ok) {
@@ -48,18 +46,20 @@ const placeDataObservable = placeDataSubject.pipe(
                 }
                 throw new Error(response.statusText);
               }),
-              mergeMap(responseJson => of({
-                  name: responseJson.name
+              map(responseJson => ({
+                  id: responseJson.xid,
+                  name: responseJson.name,
+                  imageSrc: responseJson.preview?.source,
+                  description: responseJson.wikipedia_extracts?.text
                 } as GoodSpot)
               ),
               filter(spot => !!spot.name)
             )
           }),
-          toArray(),
-          map(spots => ({ spots, weather: '' } as PlaceData))
+          distinct(spot => spot.name),
+          toArray()
         )
       }),
-      tap(console.log),
       map(data => ({ status: 'ok', data } as Result)),
       catchError(async error => ({
         status: 'error',
