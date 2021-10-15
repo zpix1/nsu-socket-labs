@@ -38,7 +38,7 @@ const placeDataObservable = placeDataSubject.pipe(
           take(4),
           mergeMap((feature: any) => {
             return fromFetch(
-              `http://api.opentripmap.com/0.1/ru/places/xid/${feature.properties.xid}?apikey=${OPENTRIPMAP_API_KEY}`
+              `https://api.opentripmap.com/0.1/ru/places/xid/${feature.properties.xid}?apikey=${OPENTRIPMAP_API_KEY}`
             ).pipe(
               switchMap(response => {
                 if (response.ok) {

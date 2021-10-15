@@ -32,7 +32,7 @@ const weatherObservable = weatherSubject.pipe(
       }),
       map(responseJson => ({
         description: `${Math.floor(responseJson.main.temp - 273)} °C`,
-        iconSrc: `http://openweathermap.org/img/wn/${responseJson.weather[0].icon}@4x.png`
+        iconSrc: `https://openweathermap.org/img/wn/${responseJson.weather[0].icon}@4x.png`
       } as Weather)),
       map(data => ({ status: 'ok', data } as Result)),
       catchError(async error => ({

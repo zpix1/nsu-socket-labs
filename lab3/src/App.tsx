@@ -89,24 +89,26 @@ export const App = () => {
             }
           </div>
           <div className="rounded col-span-3 bg-white flex flex-col gap-2 p-2">
-            <div className="font-bold">Weather</div>
-            {currentPlace && <WeatherProvider place={currentPlace}>
-              {(weather, isLoading, error) => {
-                if (error) {
-                  return <div>{error.toString()}</div>
-                } else if (isLoading) {
-                  return <div>Loading...</div>;
-                } else {
-                  if (!weather) {
-                    return <div>Enter something</div>;
+            {currentPlace && <>
+              <div className="font-bold">Weather</div>
+              <WeatherProvider place={currentPlace}>
+                {(weather, isLoading, error) => {
+                  if (error) {
+                    return <div>{error.toString()}</div>
+                  } else if (isLoading) {
+                    return <div>Loading...</div>;
+                  } else {
+                    if (!weather) {
+                      return <div>Enter something</div>;
+                    }
+                    return <div className="flex-col justify-center">
+                      {weather.description}
+                      <img className="mx-auto" src={weather.iconSrc} />
+                    </div>;
                   }
-                  return <div className="flex-col justify-center">
-                    {weather.description}
-                    <img className="mx-auto" src={weather.iconSrc} />
-                  </div>;
-                }
-              }}
-            </WeatherProvider>}
+                }}
+              </WeatherProvider>
+            </>}
           </div>
         </div>
       </div>
