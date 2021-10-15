@@ -25,6 +25,9 @@ export const App = () => {
       <div className="mt-3">
         <div className="grid grid-cols-12 gap-2">
           <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
+            {query &&
+            <>
+            <div className="font-bold">Select a place</div>
             <PlaceProvider query={query}>
               {(places, isLoading, error)  => {
                 if (isLoading) {
@@ -46,6 +49,7 @@ export const App = () => {
                 }
               }}
             </PlaceProvider>
+            </>}
           </div>
           <div className="rounded col-span-5 bg-white flex flex-col gap-2 p-2">
             {currentPlace &&
