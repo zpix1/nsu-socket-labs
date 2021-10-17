@@ -12,19 +12,19 @@ export const App = () => {
       <div className="text-3xl">
         Place Info Getter
       </div>
-      <input 
-        className="outline-none rounded p-1 mt-3"
-        type="text"
-        value={query}
-        onChange={e => {
-          setCurrentPlace(null);
-          setQuery(e.target.value);
-        }}
-        placeholder="Enter address"
-      />
       <div className="mt-3">
-        <div className="grid grid-cols-12 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
           <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
+            <input 
+              className="border outline-none rounded p-1 mt-3"
+              type="text"
+              value={query}
+              onChange={e => {
+                setCurrentPlace(null);
+                setQuery(e.target.value);
+              }}
+              placeholder="Enter address"
+            />
             {query &&
             <>
             <div className="font-bold">Select a place</div>
@@ -51,7 +51,7 @@ export const App = () => {
             </PlaceProvider>
             </>}
           </div>
-          <div className="rounded col-span-5 bg-white flex flex-col gap-2 p-2">
+          <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
             {currentPlace &&
                 <>
                   <div className="font-bold">What to see here</div>
@@ -92,7 +92,7 @@ export const App = () => {
                 </>
             }
           </div>
-          <div className="rounded col-span-3 bg-white flex flex-col gap-2 p-2">
+          <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
             {currentPlace && <>
               <div className="font-bold">Weather</div>
               <WeatherProvider place={currentPlace}>

@@ -22,7 +22,7 @@ const weatherObservable = weatherSubject.pipe(
   filter(place => !!place),
   switchMap(place => {
     return fromFetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${place!.lng}&lon=${place!.lat}&appid=${OPENWEATHERMAP_API_KEY}`
+      `https://api.openweathermap.org/data/2.5/weather?lat=${place!.lat}&lon=${place!.lng}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`
     ).pipe(
       mergeMap(response => {
         if (response.ok) {
@@ -31,7 +31,7 @@ const weatherObservable = weatherSubject.pipe(
         throw new Error(response.statusText);
       }),
       map(responseJson => ({
-        description: `${Math.floor(responseJson.main.temp - 273)} °C`,
+        description: `${Math.floor(responseJson.main.temp)} °C, ${responseJson.weather[0].main}`,
         iconSrc: `https://openweathermap.org/img/wn/${responseJson.weather[0].icon}@4x.png`
       } as Weather)),
       map(data => ({ status: 'ok', data } as Result)),
