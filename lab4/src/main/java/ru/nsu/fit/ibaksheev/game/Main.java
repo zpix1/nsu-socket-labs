@@ -50,5 +50,6 @@ public class Main {
         var player1 = new PlayerController(5001, PlayerController.Role.MASTER);
         var player2 = new PlayerController(5002, PlayerController.Role.NORMAL);
 
+        Thread.sleep(3000);
     }
 }

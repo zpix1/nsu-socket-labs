@@ -1,6 +1,8 @@
 package ru.nsu.fit.ibaksheev.game;
 
 import me.ippolitov.fit.snakes.SnakesProto;
+import ru.nsu.fit.ibaksheev.game.datatypes.PlayerSignature;
+import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
 
 import java.io.IOException;
 import java.util.logging.Logger;
@@ -17,6 +19,7 @@ public class PlayerController {
     private final UnicastManager unicastManager;
     private final MulticastManager multicastManager;
     private final PlayersManager playersManager;
+    private final AvailableGamesManager availableGamesManager;
 
     private volatile Role role;
 
@@ -27,12 +30,13 @@ public class PlayerController {
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
-    public PlayerController(int listenPort, Role role) throws IOException {
+    public PlayerController(int listenPort, Role role) throws IOException, InterruptedException {
         this.role = role;
 
         unicastManager = new UnicastManager(listenPort);
         multicastManager = new MulticastManager();
         playersManager = new PlayersManager();
+        availableGamesManager = new AvailableGamesManager();
 
         announceWorkerThread = new Thread(this::announceWorker);
         announceWorkerThread.start();
@@ -45,11 +49,17 @@ public class PlayerController {
 
         sendGameStateWorkerThread = new Thread(this::sendGameStateWorker);
         sendGameStateWorkerThread.start();
+
+        if (role == Role.NORMAL) {
+            Thread.sleep(3000);
+            var game = availableGamesManager.getGames().stream().findFirst();
+            game.ifPresent(messageWithSender -> joinGame(messageWithSender.getIp(), messageWithSender.getPort(), "ROFLAN"));
+        }
     }
 
     private void listenUnicastWorker() {
         while (true) {
-            UnicastManager.ReceivedMessageWrapper msg;
+            MessageWithSender msg;
             try {
                 msg = unicastManager.receivePacket();
             } catch (InterruptedException e) {
@@ -58,7 +68,7 @@ public class PlayerController {
             if (role == Role.MASTER) {
                 if (msg.getMessage().hasJoin()) {
                     playersManager.addPlayer(
-                            new PlayersManager.PlayerSignature(msg.getIp(), msg.getPort()),
+                            new PlayerSignature(msg.getIp(), msg.getPort()),
                             SnakesProto.GamePlayer.newBuilder()
                                     .setName(msg.getMessage().getJoin().getName())
                                     .setId(1)
@@ -117,24 +127,19 @@ public class PlayerController {
     private void announceWorker() {
         while (true) {
             if (role == Role.MASTER) {
-                multicastManager.sendPacket(
-                        SnakesProto.GameMessage
-                                .newBuilder()
-                                .setAnnouncement(
-                                        SnakesProto.GameMessage.AnnouncementMsg.
-                                                newBuilder()
-                                                .setCanJoin(true)
-                                                .setConfig(SnakesProto.GameConfig.getDefaultInstance())
-                                                .setPlayers(
-                                                        SnakesProto.GamePlayers.newBuilder()
-                                                                .addAllPlayers(playersManager.getPlayers())
-                                                )
-                                                .build()
+                availableGamesManager.announce(
+                        SnakesProto.GameMessage.AnnouncementMsg.
+                                newBuilder()
+                                .setCanJoin(true)
+                                .setConfig(SnakesProto.GameConfig.getDefaultInstance())
+                                .setPlayers(
+                                        SnakesProto.GamePlayers.newBuilder()
+                                                .addAllPlayers(playersManager.getPlayers())
                                 )
-                                .setMsgSeq(0)
                                 .build()
                 );
             } else {
+                logger.info("av games: " + availableGamesManager.getGames().size());
                 // TODO: recv packet
             }
             try {
@@ -143,5 +148,19 @@ public class PlayerController {
                 break;
             }
         }
+    }
+
+    private void joinGame(String ip, int port, String name) {
+        System.out.println(ip);
+        System.out.println(port);
+        unicastManager.sendPacket(
+                ip,
+                port,
+                SnakesProto.GameMessage.newBuilder().setJoin(
+                        SnakesProto.GameMessage.JoinMsg.newBuilder().setName(name).build()
+                        )
+                        .setMsgSeq(0)
+                        .build()
+        );
     }
 }

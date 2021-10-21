@@ -2,6 +2,7 @@ package ru.nsu.fit.ibaksheev.game;
 
 import lombok.*;
 import me.ippolitov.fit.snakes.SnakesProto;
+import ru.nsu.fit.ibaksheev.game.datatypes.PlayerSignature;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -12,13 +13,6 @@ import java.util.stream.Collectors;
 public class PlayersManager {
     private final static int NODE_TIMEOUT_MS = 5000;
 
-    @Data
-    @AllArgsConstructor
-    public static class PlayerSignature {
-        private String ip;
-        private int port;
-    }
-
     @Builder
     private static class PlayerWrapper {
         @Getter
@@ -27,7 +21,6 @@ public class PlayersManager {
         @Setter
         private Long lastSeen;
     }
-
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 

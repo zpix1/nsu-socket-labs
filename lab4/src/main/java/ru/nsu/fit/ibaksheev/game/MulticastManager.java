@@ -1,6 +1,7 @@
 package ru.nsu.fit.ibaksheev.game;
 
 import me.ippolitov.fit.snakes.SnakesProto;
+import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
 
 import java.io.IOException;
 import java.net.*;
@@ -11,11 +12,9 @@ import java.util.logging.Logger;
 
 public class MulticastManager {
     private final static int BUF_SIZE = 65000;
-    private final static int multicastPort = 9192;
-    private final static String multicastGroupIp = "239.192.0.4";
 
     private final BlockingQueue<SnakesProto.GameMessage> sendQueue = new LinkedBlockingQueue<>();
-    private final BlockingQueue<SnakesProto.GameMessage> receiveQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<MessageWithSender> receiveQueue = new LinkedBlockingQueue<>();
 
     private final MulticastSocket socket;
 
@@ -25,8 +24,8 @@ public class MulticastManager {
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
     public MulticastManager() throws IOException {
-        this.socket = new MulticastSocket(multicastPort);
-        socket.joinGroup(InetAddress.getByName(multicastGroupIp));
+        this.socket = new MulticastSocket(Config.multicastPort);
+        socket.joinGroup(InetAddress.getByName(Config.multicastGroupIp));
 
         sendWorkerThread = new Thread(this::sendWorker);
         sendWorkerThread.start();
@@ -38,7 +37,7 @@ public class MulticastManager {
         sendQueue.add(message);
     }
 
-    public SnakesProto.GameMessage receivePacket() throws InterruptedException {
+    public MessageWithSender receivePacket() throws InterruptedException {
         return receiveQueue.take();
     }
 
@@ -51,7 +50,13 @@ public class MulticastManager {
                 byte[] bytes = new byte[receivePacket.getLength()];
                 System.arraycopy(receiveBuffer, 0, bytes, 0, receivePacket.getLength());
                 var gameMessage = SnakesProto.GameMessage.parseFrom(bytes);
-                receiveQueue.add(gameMessage);
+                receiveQueue.add(
+                        MessageWithSender.builder()
+                                .ip(receivePacket.getAddress().toString())
+                                .port(receivePacket.getPort())
+                                .message(gameMessage)
+                                .build()
+                );
             } catch (IOException e) {
                 logger.warning(e.getLocalizedMessage());
             }
@@ -73,8 +78,8 @@ public class MulticastManager {
                 var packet = new DatagramPacket(
                         sendData,
                         sendData.length,
-                        InetAddress.getByName(multicastGroupIp),
-                        multicastPort
+                        InetAddress.getByName(Config.multicastGroupIp),
+                        Config.multicastPort
                 );
 
                 socket.send(packet);

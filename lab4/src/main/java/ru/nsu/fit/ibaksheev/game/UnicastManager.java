@@ -1,9 +1,8 @@
 package ru.nsu.fit.ibaksheev.game;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
 import me.ippolitov.fit.snakes.SnakesProto.GameMessage;
+import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
+import ru.nsu.fit.ibaksheev.game.datatypes.ToSendMessageWrapper;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -21,40 +20,11 @@ public class UnicastManager {
     private final static int ACK_CHECK_MS = 2000;
     private final static int BUF_SIZE = 65000;
 
-    @Builder
-    public static class ToSendMessageWrapper {
-        @Getter
-        @Setter
-        private long msgSeq;
-        @Getter
-        private GameMessage message;
-        @Getter
-        private String ip;
-        @Getter
-        private Integer port;
-        @Getter
-        @Setter
-        private Long sentAt;
-        @Getter
-        @Setter
-        private int retryCount = 3;
-    }
-
-    @Builder
-    public static class ReceivedMessageWrapper {
-        @Getter
-        private GameMessage message;
-        @Getter
-        private String ip;
-        @Getter
-        private Integer port;
-    }
-
     private final DatagramSocket socket;
     private long msgSeq = 0;
 
     private final BlockingQueue<ToSendMessageWrapper> sendQueue = new LinkedBlockingQueue<>();
-    private final BlockingQueue<ReceivedMessageWrapper> receiveQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<MessageWithSender> receiveQueue = new LinkedBlockingQueue<>();
     private final List<ToSendMessageWrapper> sentList = new ArrayList<>();
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
@@ -78,7 +48,7 @@ public class UnicastManager {
         sendQueue.add(ToSendMessageWrapper.builder().ip(ip).port(port).message(msg).build());
     }
 
-    public ReceivedMessageWrapper receivePacket() throws InterruptedException {
+    public MessageWithSender receivePacket() throws InterruptedException {
         return receiveQueue.take();
     }
 
@@ -91,7 +61,7 @@ public class UnicastManager {
                 byte[] bytes = new byte[receivePacket.getLength()];
                 System.arraycopy(receiveBuffer, 0, bytes, 0, receivePacket.getLength());
                 var gameMessage = GameMessage.parseFrom(bytes);
-                receiveQueue.add(ReceivedMessageWrapper.builder().message(gameMessage).ip(receivePacket.getAddress().toString()).build());
+                receiveQueue.add(MessageWithSender.builder().message(gameMessage).ip(receivePacket.getAddress().toString()).build());
 
                 receivePacket.setLength(receiveBuffer.length);
 
