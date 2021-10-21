@@ -16,7 +16,7 @@ export const App = () => {
         <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
           <div className="rounded col-span-4 bg-white flex flex-col gap-2 p-2">
             <input 
-              className="border outline-none rounded p-1 mt-3"
+              className="border outline-none rounded p-1"
               type="text"
               value={query}
               onChange={e => {

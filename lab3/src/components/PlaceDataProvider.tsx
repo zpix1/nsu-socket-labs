@@ -24,7 +24,7 @@ const placeDataObservable = placeDataSubject.pipe(
   filter(place => !!place),
   switchMap(place => {
     return fromFetch(
-      `https://api.opentripmap.com/0.1/ru/places/radius?radius=1000&lon=${place!.lng}&lat=${place!.lat}&apikey=${OPENTRIPMAP_API_KEY}`
+      `https://api.opentripmap.com/0.1/ru/places/radius?radius=10000&lon=${place!.lng}&lat=${place!.lat}&apikey=${OPENTRIPMAP_API_KEY}`
     ).pipe(
       mergeMap(response => {
         if (response.ok) {
