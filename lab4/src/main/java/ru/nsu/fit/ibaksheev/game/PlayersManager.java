@@ -1,21 +1,22 @@
 package ru.nsu.fit.ibaksheev.game;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 import me.ippolitov.fit.snakes.SnakesProto;
 
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class PlayersManager {
     private final static int NODE_TIMEOUT_MS = 5000;
 
     @Data
+    @AllArgsConstructor
     public static class PlayerSignature {
-        private int port;
         private String ip;
+        private int port;
     }
 
     @Builder
@@ -26,6 +27,7 @@ public class PlayersManager {
         @Setter
         private Long lastSeen;
     }
+
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
@@ -44,6 +46,7 @@ public class PlayersManager {
     }
 
     void addPlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
+        logger.info("new player" + signature.toString());
         players.put(
                 signature,
                 PlayerWrapper.builder()
@@ -53,6 +56,14 @@ public class PlayersManager {
         );
     }
 
+    Set<PlayerSignature> getSignatures() {
+        return players.keySet();
+    }
+
+    Collection<SnakesProto.GamePlayer> getPlayers() {
+        return players.values().stream().map(PlayerWrapper::getPlayer).collect(Collectors.toList());
+    }
+
     void checkDeadWorker() {
         while (true) {
             try {
@@ -60,8 +71,8 @@ public class PlayersManager {
             } catch (InterruptedException e) {
                 break;
             }
-            var currentTime = System.currentTimeMillis();
             synchronized (players) {
+                var currentTime = System.currentTimeMillis();
                 players.entrySet().stream()
                         .filter(e -> currentTime - e.getValue().getLastSeen() > NODE_TIMEOUT_MS)
                         .forEach(e -> logger.warning("Player dead: " + e.getKey()));

@@ -27,7 +27,7 @@ public class UnicastManager {
         @Setter
         private long msgSeq;
         @Getter
-        private GameMessage.Builder builder;
+        private GameMessage message;
         @Getter
         private String ip;
         @Getter
@@ -74,8 +74,8 @@ public class UnicastManager {
         ackCheckWorkerThread.start();
     }
 
-    public void sendPacket(ToSendMessageWrapper wrapper) {
-        sendQueue.add(wrapper);
+    public void sendPacket(String ip, int port, GameMessage msg) {
+        sendQueue.add(ToSendMessageWrapper.builder().ip(ip).port(port).message(msg).build());
     }
 
     public ReceivedMessageWrapper receivePacket() throws InterruptedException {
@@ -156,7 +156,7 @@ public class UnicastManager {
 
             msgSeq++;
 
-            var sendData = wrapper.getBuilder().setMsgSeq(msgSeq).build().toByteArray();
+            var sendData = GameMessage.newBuilder(wrapper.getMessage()).setMsgSeq(msgSeq).build().toByteArray();
             wrapper.setMsgSeq(msgSeq);
             wrapper.setSentAt(System.currentTimeMillis());
 

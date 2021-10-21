@@ -11,8 +11,8 @@ import java.util.logging.Logger;
 
 public class MulticastManager {
     private final static int BUF_SIZE = 65000;
-    private final int multicastPort = 9192;
-    private final String multicastGroupIp = "239.192.0.4";
+    private final static int multicastPort = 9192;
+    private final static String multicastGroupIp = "239.192.0.4";
 
     private final BlockingQueue<SnakesProto.GameMessage> sendQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<SnakesProto.GameMessage> receiveQueue = new LinkedBlockingQueue<>();
@@ -26,7 +26,7 @@ public class MulticastManager {
 
     public MulticastManager() throws IOException {
         this.socket = new MulticastSocket(multicastPort);
-        socket.joinGroup(InetAddress.getByName("228.5.6.7"));
+        socket.joinGroup(InetAddress.getByName(multicastGroupIp));
 
         sendWorkerThread = new Thread(this::sendWorker);
         sendWorkerThread.start();
@@ -72,7 +72,9 @@ public class MulticastManager {
             try {
                 var packet = new DatagramPacket(
                         sendData,
-                        sendData.length
+                        sendData.length,
+                        InetAddress.getByName(multicastGroupIp),
+                        multicastPort
                 );
 
                 socket.send(packet);
