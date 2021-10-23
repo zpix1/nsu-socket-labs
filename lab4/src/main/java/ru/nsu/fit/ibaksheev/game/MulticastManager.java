@@ -24,8 +24,8 @@ public class MulticastManager {
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
     public MulticastManager() throws IOException {
-        this.socket = new MulticastSocket(Config.multicastPort);
-        socket.joinGroup(InetAddress.getByName(Config.multicastGroupIp));
+        this.socket = new MulticastSocket(Config.MULTICAST_PORT);
+        socket.joinGroup(InetAddress.getByName(Config.MULTICAST_GROUP_IP));
 
         sendWorkerThread = new Thread(this::sendWorker);
         sendWorkerThread.start();
@@ -37,6 +37,7 @@ public class MulticastManager {
         sendQueue.add(message);
     }
 
+    // WF
     public MessageWithSender receivePacket() throws InterruptedException {
         return receiveQueue.take();
     }
@@ -78,8 +79,8 @@ public class MulticastManager {
                 var packet = new DatagramPacket(
                         sendData,
                         sendData.length,
-                        InetAddress.getByName(Config.multicastGroupIp),
-                        Config.multicastPort
+                        InetAddress.getByName(Config.MULTICAST_GROUP_IP),
+                        Config.MULTICAST_PORT
                 );
 
                 socket.send(packet);

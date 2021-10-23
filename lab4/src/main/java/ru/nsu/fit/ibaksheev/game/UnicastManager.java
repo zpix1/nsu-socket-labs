@@ -61,7 +61,7 @@ public class UnicastManager {
                 byte[] bytes = new byte[receivePacket.getLength()];
                 System.arraycopy(receiveBuffer, 0, bytes, 0, receivePacket.getLength());
                 var gameMessage = GameMessage.parseFrom(bytes);
-                receiveQueue.add(MessageWithSender.builder().message(gameMessage).ip(receivePacket.getAddress().toString()).build());
+                receiveQueue.add(MessageWithSender.builder().message(gameMessage).port(receivePacket.getPort()).ip(receivePacket.getAddress().getHostAddress()).build());
 
                 receivePacket.setLength(receiveBuffer.length);
 
@@ -72,7 +72,7 @@ public class UnicastManager {
                                 .findAny();
                         if (elem.isPresent()) {
                             sentList.remove(elem.get());
-                            logger.info("acked packet, very good");
+//                            logger.info("acked packet, very good");
                         } else {
                             logger.log(Level.WARNING, "got ack to a non-existent packet");
                         }
@@ -144,7 +144,7 @@ public class UnicastManager {
 
                 socket.send(packet);
 
-                logger.info("Sent " + packet);
+//                logger.info("Sent " + packet);
             } catch (IOException e) {
                 logger.log(Level.SEVERE, e.getLocalizedMessage());
             }

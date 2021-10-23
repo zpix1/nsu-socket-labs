@@ -47,8 +47,8 @@ public class Main {
     public static void main(String[] args) throws InterruptedException, IOException {
         LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
 
-        var player1 = new PlayerController(5001, PlayerController.Role.MASTER);
-        var player2 = new PlayerController(5002, PlayerController.Role.NORMAL);
+        var player1 = new PlayerController("Master roflan", 5001, SnakesProto.NodeRole.MASTER);
+        var player2 = new PlayerController("Just roflan", 5002, SnakesProto.NodeRole.NORMAL);
 
         Thread.sleep(3000);
     }
