@@ -47,6 +47,7 @@ public class PlayersManager {
     }
 
     void touchPlayer(PlayerSignature signature) {
+//        System.out.println(signature);
         var playerWrapper = players.get(signature);
         if (playerWrapper != null) {
             playerWrapper.setLastSeen(System.currentTimeMillis());
@@ -119,7 +120,7 @@ public class PlayersManager {
 
     public Optional<SnakesProto.GamePlayer> getMyself() {
         return players.values().stream().map(PlayerWrapper::getPlayer).filter(
-                player -> new PlayerSignature(player) == mySignature
+                player -> new PlayerSignature(player).equals(mySignature)
         ).findAny();
     }
 
@@ -131,10 +132,12 @@ public class PlayersManager {
                 break;
             }
             synchronized (players) {
+//                System.out.println(players.values().stream().map(e -> e.getLastSeen().toString()).collect(Collectors.joining(", ")));
                 var currentTime = System.currentTimeMillis();
                 players.entrySet().stream()
                         .filter(e -> e.getKey() != mySignature)
                         .filter(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS)
+//                        .peek(System.out::println)
                         .max((a, b) -> a.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? 1 : b.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? -1 : 0)
                         .ifPresent(e -> {
                             logger.warning("Player dead: " + e.getValue().getPlayer().getRole());

@@ -29,8 +29,6 @@ public class PlayerController {
     private final Thread listenMulticastWorkerThread;
     private final Thread sendGameStateWorkerThread;
 
-    private final Disposable pingDisposable;
-
     private final String name;
 
     private final AtomicBoolean stopped = new AtomicBoolean(false);
@@ -50,8 +48,8 @@ public class PlayerController {
         playersManager = new PlayersManager(mySignature, this::onPlayerDeadListener);
         availableGamesManager = new AvailableGamesManager();
 
-        pingDisposable = pingWorker();
         infoWorker();
+        new Thread(this::pingWorker).start();
 
         announceWorkerThread = new Thread(this::announceWorker);
         announceWorkerThread.start();
@@ -105,7 +103,7 @@ public class PlayerController {
 
     private void onPlayerDeadListener(SnakesProto.GamePlayer deadPlayer) {
 //        logger.warning(String.format("me is %s, he is %s", mySignature, new PlayerSignature(deadPlayer)));
-//        logger.warning(String.format("%s (%s): %s (%s) is dead", name, role, deadPlayer.getName(), deadPlayer.getRole()));
+        logger.warning(String.format("%s (%s): %s (%s) is dead", name, role, deadPlayer.getName(), deadPlayer.getRole()));
         // Узел с ролью MASTER заметил, что отвалился DEPUTY. Тогда он выбирает нового DEPUTY среди NORMAL-ов, и сообщает об этом самому DEPUTY сообщением RoleChangeMsg (остальные узнают о новом DEPUTY из планового StatusMsg, им это знать не срочно).
         if (role == SnakesProto.NodeRole.MASTER) {
             if (deadPlayer.getRole() == SnakesProto.NodeRole.DEPUTY) {
@@ -176,35 +174,37 @@ public class PlayerController {
         );
     }
 
-    private @NonNull Disposable pingWorker() {
-        return Observable.interval(Config.PING_INTERVAL_MS, TimeUnit.MILLISECONDS)
-                .takeUntil(unused -> !stopped.get())
-                .subscribeOn(Schedulers.io())
-                .subscribe(time -> {
-                    if (role == SnakesProto.NodeRole.MASTER) {
-                        playersManager.getPlayers().forEach(this::sendPing);
-                    } else {
-                        playersManager.getMaster().ifPresent(this::sendPing);
-                    }
-                });
+    private void pingWorker() {
+        while (!stopped.get()) {
+            if (role == SnakesProto.NodeRole.MASTER) {
+                playersManager.getPlayers().forEach(this::sendPing);
+            } else {
+                playersManager.getMaster().ifPresent(this::sendPing);
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
     }
 
     private @NonNull Disposable infoWorker() {
         return Observable.interval(5000, TimeUnit.MILLISECONDS)
 //                .takeUntil(time -> !stopped.get())
                 .subscribe(time -> {
-                    logger.info(
-                            String.format("%s%s: is %s, game players: %d (%s)",
-                                    stopped.get() ? "DEAD, " : "",
-                                    name,
-                                    role,
-                                    playersManager.getPlayers().size(),
-                                    playersManager.getPlayers().stream()
-                                            .map(player -> player.getName() + " (" + player.getRole() + ")")
-                                            .collect(Collectors.joining(", "))
-                            )
-                    );
-                }
+                            logger.info(
+                                    String.format("%s%s: is %s, game players: %d (%s)",
+                                            stopped.get() ? "DEAD, " : "",
+                                            name,
+                                            role,
+                                            playersManager.getPlayers().size(),
+                                            playersManager.getPlayers().stream()
+                                                    .map(player -> player.getName() + " (" + player.getRole() + ")")
+                                                    .collect(Collectors.joining(", "))
+                                    )
+                            );
+                        }
                 );
     }
 

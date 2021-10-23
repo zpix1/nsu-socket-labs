@@ -33,6 +33,8 @@ public class UnicastManager {
     private final Thread receiveWorkerThread;
     private final Thread ackCheckWorkerThread;
 
+    private volatile boolean stopped = false;
+
     public UnicastManager(int listenPort) throws SocketException {
         this.socket = new DatagramSocket(listenPort);
 
@@ -45,9 +47,12 @@ public class UnicastManager {
     }
 
     void stop() {
+        stopped = true;
         sendWorkerThread.interrupt();
         receiveWorkerThread.interrupt();
         ackCheckWorkerThread.interrupt();
+        sendQueue.clear();
+        receiveQueue.clear();
     }
 
     public void sendPacket(String ip, int port, GameMessage msg) {
@@ -60,7 +65,7 @@ public class UnicastManager {
 
     private void receiveWorker() {
         byte[] receiveBuffer = new byte[BUF_SIZE];
-        while (true) {
+        while (!stopped) {
             var receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             try {
                 socket.receive(receivePacket);
@@ -135,7 +140,6 @@ public class UnicastManager {
             var sendData = GameMessage.newBuilder(wrapper.getMessage()).setMsgSeq(msgSeq).build().toByteArray();
             wrapper.setMsgSeq(msgSeq);
             wrapper.setSentAt(System.currentTimeMillis());
-
             try {
                 var packet = new DatagramPacket(
                         sendData,
