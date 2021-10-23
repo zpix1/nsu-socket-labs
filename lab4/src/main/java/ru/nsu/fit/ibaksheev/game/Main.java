@@ -55,7 +55,7 @@ public class Main {
         Thread.sleep(11000);
 
         System.out.println("killing");
-        player2.stop();
+        player3.stop();
         System.out.println("killed");
     }
 }

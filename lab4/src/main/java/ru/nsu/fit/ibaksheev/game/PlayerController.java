@@ -1,8 +1,6 @@
 package ru.nsu.fit.ibaksheev.game;
 
-import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import me.ippolitov.fit.snakes.SnakesProto;
 import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
@@ -48,7 +46,7 @@ public class PlayerController {
         playersManager = new PlayersManager(mySignature, this::onPlayerDeadListener);
         availableGamesManager = new AvailableGamesManager();
 
-        infoWorker();
+        new Thread(this::infoWorker).start();
         new Thread(this::pingWorker).start();
 
         announceWorkerThread = new Thread(this::announceWorker);
@@ -182,30 +180,32 @@ public class PlayerController {
                 playersManager.getMaster().ifPresent(this::sendPing);
             }
             try {
-                Thread.sleep(1000);
+                Thread.sleep(Config.PING_INTERVAL_MS);
             } catch (InterruptedException e) {
                 break;
             }
         }
     }
 
-    private @NonNull Disposable infoWorker() {
-        return Observable.interval(5000, TimeUnit.MILLISECONDS)
-//                .takeUntil(time -> !stopped.get())
-                .subscribe(time -> {
-                            logger.info(
-                                    String.format("%s%s: is %s, game players: %d (%s)",
-                                            stopped.get() ? "DEAD, " : "",
-                                            name,
-                                            role,
-                                            playersManager.getPlayers().size(),
-                                            playersManager.getPlayers().stream()
-                                                    .map(player -> player.getName() + " (" + player.getRole() + ")")
-                                                    .collect(Collectors.joining(", "))
-                                    )
-                            );
-                        }
-                );
+    private void infoWorker() {
+        while (!stopped.get()) {
+            logger.info(
+                    String.format("%s%s: is %s, game players: %d (%s)",
+                            stopped.get() ? "DEAD, " : "",
+                            name,
+                            role,
+                            playersManager.getPlayers().size(),
+                            playersManager.getPlayers().stream()
+                                    .map(player -> player.getName() + " (" + player.getRole() + ")")
+                                    .collect(Collectors.joining(", "))
+                    )
+            );
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
     }
 
     private void listenUnicastWorker() {
