@@ -72,17 +72,17 @@ export const App = () => {
                           <div>Top {spots.length} spot{spots.length == 1 ? '' : 's'}: </div>
                           {spots.map(spot =>
                             <div 
-                              className="border rounded flex justify-between text-left p-3 gap-2"
+                              className="border rounded text-left p-3 gap-2"
                               key={spot.id}
                             >
+                            {spot.imageSrc && <img  
+                              src={spot.imageSrc}
+                              className="h-20 rounded float-right mb-1 ml-1" 
+                            />}
                               <div className="">
                                   <h2 className="mb-1 font-bold">{spot.name}</h2>
                                   <p className="text-gray-600 text-sm">{spot.description}</p>
                               </div>
-                              {spot.imageSrc && <img  
-                                src={spot.imageSrc}
-                                className="h-20 rounded" 
-                              />}
                             </div>
                           )}
                         </>;
