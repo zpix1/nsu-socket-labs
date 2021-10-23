@@ -103,10 +103,9 @@ public class PlayerController {
         sendGameStateWorkerThread.interrupt();
     }
 
-    // TODO: After deputy becomes master he must ignore other dead mens
     private void onPlayerDeadListener(SnakesProto.GamePlayer deadPlayer) {
-        logger.warning(String.format("me is %s, he is %s", mySignature, new PlayerSignature(deadPlayer)));
-        logger.warning(String.format("%s (%s): %s (%s) is dead", name, role, deadPlayer.getName(), deadPlayer.getRole()));
+//        logger.warning(String.format("me is %s, he is %s", mySignature, new PlayerSignature(deadPlayer)));
+//        logger.warning(String.format("%s (%s): %s (%s) is dead", name, role, deadPlayer.getName(), deadPlayer.getRole()));
         // Узел с ролью MASTER заметил, что отвалился DEPUTY. Тогда он выбирает нового DEPUTY среди NORMAL-ов, и сообщает об этом самому DEPUTY сообщением RoleChangeMsg (остальные узнают о новом DEPUTY из планового StatusMsg, им это знать не срочно).
         if (role == SnakesProto.NodeRole.MASTER) {
             if (deadPlayer.getRole() == SnakesProto.NodeRole.DEPUTY) {
@@ -147,19 +146,22 @@ public class PlayerController {
                 role = SnakesProto.NodeRole.MASTER;
                 playersManager.getNormal().ifPresent(
                         newDeputy -> {
+                            playersManager.changeRole(mySignature, SnakesProto.NodeRole.MASTER);
                             playersManager.changeRole(new PlayerSignature(newDeputy), SnakesProto.NodeRole.DEPUTY);
-                            unicastManager.sendPacket(
-                                    newDeputy.getIpAddress(),
-                                    newDeputy.getPort(),
-                                    SnakesProto.GameMessage.newBuilder()
-                                            .setMsgSeq(0)
-                                            .setRoleChange(
-                                                    SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
-                                                            .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
-                                                            .build()
-                                            )
-                                            .build()
-                            );
+                            // если мастер сдох, а депутат это увидел раньше и назначил нормала депутатом до того как он понял что мастер сдох
+                            // то нормал-депутат как только увидит что мастер сдох станет мастером (а мастер уже есть)
+//                            unicastManager.sendPacket(
+//                                    newDeputy.getIpAddress(),
+//                                    newDeputy.getPort(),
+//                                    SnakesProto.GameMessage.newBuilder()
+//                                            .setMsgSeq(0)
+//                                            .setRoleChange(
+//                                                    SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
+//                                                            .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
+//                                                            .build()
+//                                            )
+//                                            .build()
+//                            );
                         }
                 );
             }
@@ -262,9 +264,10 @@ public class PlayerController {
             if (role != SnakesProto.NodeRole.MASTER) {
                 if (msg.getMessage().hasState()) {
                     var state = msg.getMessage().getState().getState();
-                    state.getPlayers().getPlayersList().forEach(player -> playersManager.updatePlayers(
+                    state.getPlayers().getPlayersList().forEach(player -> playersManager.updatePlayer(
                             new PlayerSignature(player), player
                     ));
+                    playersManager.getMyself().ifPresent(gamePlayer -> role = gamePlayer.getRole());
                 }
                 if (msg.getMessage().hasRoleChange()) {
                     var roleChange = msg.getMessage().getRoleChange();

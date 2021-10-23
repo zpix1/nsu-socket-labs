@@ -53,7 +53,7 @@ public class PlayersManager {
         }
     }
 
-    void updatePlayers(PlayerSignature signature, SnakesProto.GamePlayer player) {
+    void updatePlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
 //        logger.info(signature.toString());
         players.put(
                 signature,
@@ -117,6 +117,12 @@ public class PlayersManager {
         ).findAny();
     }
 
+    public Optional<SnakesProto.GamePlayer> getMyself() {
+        return players.values().stream().map(PlayerWrapper::getPlayer).filter(
+                player -> new PlayerSignature(player) == mySignature
+        ).findAny();
+    }
+
     void checkDeadWorker() {
         while (true) {
             try {
@@ -129,12 +135,12 @@ public class PlayersManager {
                 players.entrySet().stream()
                         .filter(e -> e.getKey() != mySignature)
                         .filter(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS)
-                        .sorted((a, b) -> a.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? 1 : b.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? -1 : 0)
-                        .forEach(e -> {
-//                            logger.warning("Player dead: " + e.getValue().getPlayer());
+                        .max((a, b) -> a.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? 1 : b.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? -1 : 0)
+                        .ifPresent(e -> {
+                            logger.warning("Player dead: " + e.getValue().getPlayer().getRole());
                             this.onPlayerDeadListener.accept(e.getValue().getPlayer());
+                            players.remove(e.getKey());
                         });
-                players.entrySet().removeIf(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS);
             }
         }
     }
