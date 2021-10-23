@@ -15,7 +15,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class PlayersManager {
-    private final static int NODE_TIMEOUT_MS = 5000;
 
     @Builder
     private static class PlayerWrapper {
@@ -33,11 +32,18 @@ public class PlayersManager {
     private final Consumer<SnakesProto.GamePlayer> onPlayerDeadListener;
     private final Thread checkDeadWorkerThread;
 
-    public PlayersManager(Consumer<SnakesProto.GamePlayer> onPlayerDeadListener) {
+    private final PlayerSignature mySignature;
+
+    public PlayersManager(PlayerSignature mySignature, Consumer<SnakesProto.GamePlayer> onPlayerDeadListener) {
+        this.mySignature = mySignature;
         this.players = new HashMap<>();
         this.onPlayerDeadListener = onPlayerDeadListener;
         checkDeadWorkerThread = new Thread(this::checkDeadWorker);
         checkDeadWorkerThread.start();
+    }
+
+    void stop() {
+        checkDeadWorkerThread.interrupt();
     }
 
     void touchPlayer(PlayerSignature signature) {
@@ -47,13 +53,15 @@ public class PlayersManager {
         }
     }
 
-    void touchOrAddPlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
+    void updatePlayers(PlayerSignature signature, SnakesProto.GamePlayer player) {
 //        logger.info(signature.toString());
-        if (players.containsKey(signature)) {
-            touchPlayer(signature);
-        } else {
-            addPlayer(signature, player);
-        }
+        players.put(
+                signature,
+                PlayerWrapper.builder()
+                        .player(player)
+                        .lastSeen(System.currentTimeMillis())
+                        .build()
+        );
     }
 
     void addPlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
@@ -65,6 +73,20 @@ public class PlayersManager {
                         .lastSeen(System.currentTimeMillis())
                         .build()
         );
+    }
+
+    void changeRole(PlayerSignature signature, SnakesProto.NodeRole role) {
+        synchronized (players) {
+            var player = players.get(signature);
+            if (player != null) {
+                players.put(signature,
+                        new PlayerWrapper(
+                                SnakesProto.GamePlayer.newBuilder(player.getPlayer()).setRole(role).build(),
+                                player.getLastSeen()
+                        )
+                );
+            }
+        }
     }
 
     Set<PlayerSignature> getSignatures() {
@@ -83,22 +105,36 @@ public class PlayersManager {
         ).findAny();
     }
 
+    public Optional<SnakesProto.GamePlayer> getDeputy() {
+        return players.values().stream().map(PlayerWrapper::getPlayer).filter(
+                player -> player.getRole() == SnakesProto.NodeRole.DEPUTY
+        ).findAny();
+    }
+
+    public Optional<SnakesProto.GamePlayer> getNormal() {
+        return players.values().stream().map(PlayerWrapper::getPlayer).filter(
+                player -> player.getRole() == SnakesProto.NodeRole.NORMAL
+        ).findAny();
+    }
+
     void checkDeadWorker() {
         while (true) {
             try {
-                Thread.sleep(NODE_TIMEOUT_MS);
+                Thread.sleep(Config.NODE_TIMEOUT_MS);
             } catch (InterruptedException e) {
                 break;
             }
             synchronized (players) {
                 var currentTime = System.currentTimeMillis();
                 players.entrySet().stream()
-                        .filter(e -> currentTime - e.getValue().getLastSeen() > NODE_TIMEOUT_MS)
+                        .filter(e -> e.getKey() != mySignature)
+                        .filter(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS)
+                        .sorted((a, b) -> a.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? 1 : b.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? -1 : 0)
                         .forEach(e -> {
-                            logger.warning("Player dead: " + e.getValue().getPlayer());
+//                            logger.warning("Player dead: " + e.getValue().getPlayer());
                             this.onPlayerDeadListener.accept(e.getValue().getPlayer());
                         });
-                players.entrySet().removeIf(e -> currentTime - e.getValue().getLastSeen() > NODE_TIMEOUT_MS);
+                players.entrySet().removeIf(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS);
             }
         }
     }

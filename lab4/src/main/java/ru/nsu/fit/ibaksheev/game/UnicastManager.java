@@ -44,6 +44,12 @@ public class UnicastManager {
         ackCheckWorkerThread.start();
     }
 
+    void stop() {
+        sendWorkerThread.interrupt();
+        receiveWorkerThread.interrupt();
+        ackCheckWorkerThread.interrupt();
+    }
+
     public void sendPacket(String ip, int port, GameMessage msg) {
         sendQueue.add(ToSendMessageWrapper.builder().ip(ip).port(port).message(msg).build());
     }

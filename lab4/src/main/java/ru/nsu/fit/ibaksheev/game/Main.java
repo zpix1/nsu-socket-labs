@@ -48,8 +48,14 @@ public class Main {
         LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
 
         var player1 = new PlayerController("Master roflan", 5001, SnakesProto.NodeRole.MASTER);
-        var player2 = new PlayerController("Just roflan", 5002, SnakesProto.NodeRole.NORMAL);
+        var player2 = new PlayerController("Deputy roflan", 5002, SnakesProto.NodeRole.NORMAL);
+        Thread.sleep(1000);
+        var player3 = new PlayerController("Just roflan", 5003, SnakesProto.NodeRole.NORMAL);
 
-        Thread.sleep(3000);
+        Thread.sleep(11000);
+
+        System.out.println("killing");
+        player1.stop();
+        System.out.println("killed");
     }
 }

@@ -52,4 +52,8 @@ public class AvailableGamesManager {
     public Collection<MessageWithSender> getGames() {
         return games;
     }
+
+    void stop() {
+        gamesListenerWorkerThread.interrupt();
+    }
 }

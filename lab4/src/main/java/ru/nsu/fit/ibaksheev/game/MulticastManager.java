@@ -33,6 +33,11 @@ public class MulticastManager {
         receiveWorkerThread.start();
     }
 
+    void stop() {
+        sendWorkerThread.interrupt();
+        receiveWorkerThread.interrupt();
+    }
+
     public void sendPacket(SnakesProto.GameMessage message) {
         sendQueue.add(message);
     }
