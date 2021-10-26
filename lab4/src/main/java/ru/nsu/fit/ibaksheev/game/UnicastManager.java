@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -17,8 +16,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class UnicastManager {
-    private final static int ACK_CHECK_MS = 2000;
-    private final static int BUF_SIZE = 65000;
+    private static final int ACK_CHECK_MS = 2000;
+    private static final int BUF_SIZE = 65000;
 
     private final DatagramSocket socket;
     private long msgSeq = 0;
@@ -35,8 +34,8 @@ public class UnicastManager {
 
     private volatile boolean stopped = false;
 
-    public UnicastManager(int listenPort) throws SocketException {
-        this.socket = new DatagramSocket(listenPort);
+    public UnicastManager(DatagramSocket socket) {
+        this.socket = socket;
 
         sendWorkerThread = new Thread(this::sendWorker);
         sendWorkerThread.start();
@@ -73,7 +72,6 @@ public class UnicastManager {
                 System.arraycopy(receiveBuffer, 0, bytes, 0, receivePacket.getLength());
                 var gameMessage = GameMessage.parseFrom(bytes);
                 receiveQueue.add(MessageWithSender.builder().message(gameMessage).port(receivePacket.getPort()).ip(receivePacket.getAddress().getHostAddress()).build());
-
                 receivePacket.setLength(receiveBuffer.length);
 
                 if (gameMessage.hasAck()) {

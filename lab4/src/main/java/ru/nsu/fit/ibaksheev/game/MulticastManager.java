@@ -11,21 +11,23 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class MulticastManager {
-    private final static int BUF_SIZE = 65000;
+    private static final int BUF_SIZE = 65000;
 
     private final BlockingQueue<SnakesProto.GameMessage> sendQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<MessageWithSender> receiveQueue = new LinkedBlockingQueue<>();
 
-    private final MulticastSocket socket;
+    private final MulticastSocket recvSocket;
+    private final DatagramSocket sendSocket;
 
     private final Thread sendWorkerThread;
     private final Thread receiveWorkerThread;
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
-    public MulticastManager() throws IOException {
-        this.socket = new MulticastSocket(Config.MULTICAST_PORT);
-        socket.joinGroup(InetAddress.getByName(Config.MULTICAST_GROUP_IP));
+    public MulticastManager(DatagramSocket sendSocket) throws IOException {
+        this.sendSocket = sendSocket;
+        this.recvSocket = new MulticastSocket(Config.MULTICAST_PORT);
+        recvSocket.joinGroup(InetAddress.getByName(Config.MULTICAST_GROUP_IP));
 
         sendWorkerThread = new Thread(this::sendWorker);
         sendWorkerThread.start();
@@ -52,13 +54,13 @@ public class MulticastManager {
         while (true) {
             var receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             try {
-                socket.receive(receivePacket);
+                recvSocket.receive(receivePacket);
                 byte[] bytes = new byte[receivePacket.getLength()];
                 System.arraycopy(receiveBuffer, 0, bytes, 0, receivePacket.getLength());
                 var gameMessage = SnakesProto.GameMessage.parseFrom(bytes);
                 receiveQueue.add(
                         MessageWithSender.builder()
-                                .ip(receivePacket.getAddress().toString())
+                                .ip(receivePacket.getAddress().getHostAddress())
                                 .port(receivePacket.getPort())
                                 .message(gameMessage)
                                 .build()
@@ -88,7 +90,7 @@ public class MulticastManager {
                         Config.MULTICAST_PORT
                 );
 
-                socket.send(packet);
+                sendSocket.send(packet);
             } catch (IOException e) {
                 logger.log(Level.SEVERE, e.getLocalizedMessage());
             }

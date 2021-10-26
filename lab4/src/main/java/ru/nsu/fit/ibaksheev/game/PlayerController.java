@@ -7,6 +7,7 @@ import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
 import ru.nsu.fit.ibaksheev.game.datatypes.PlayerSignature;
 
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -14,6 +15,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class PlayerController {
+    private int myId;
 
     private final UnicastManager unicastManager;
     private final MulticastManager multicastManager;
@@ -41,10 +43,11 @@ public class PlayerController {
         mySignature = new PlayerSignature(Inet4Address.getLocalHost().getHostAddress(), listenPort);
         logger.info(name + " started with " + mySignature);
 
-        unicastManager = new UnicastManager(listenPort);
-        multicastManager = new MulticastManager();
+        DatagramSocket socket = new DatagramSocket(listenPort);
+        unicastManager = new UnicastManager(socket);
+        multicastManager = new MulticastManager(socket);
         playersManager = new PlayersManager(mySignature, this::onPlayerDeadListener);
-        availableGamesManager = new AvailableGamesManager();
+        availableGamesManager = new AvailableGamesManager(multicastManager);
 
         new Thread(this::infoWorker).start();
         new Thread(this::pingWorker).start();
@@ -61,12 +64,14 @@ public class PlayerController {
         sendGameStateWorkerThread = new Thread(this::sendGameStateWorker);
         sendGameStateWorkerThread.start();
 
+        myId = playersManager.getNextPlayerId();
+
         if (role == SnakesProto.NodeRole.MASTER) {
-            playersManager.addPlayer(
+            playersManager.updatePlayer(
                     mySignature,
                     SnakesProto.GamePlayer.newBuilder()
                             .setName(name)
-                            .setId(1)
+                            .setId(myId)
                             .setIpAddress(mySignature.getIp())
                             .setPort(listenPort)
                             .setScore(0)
@@ -79,7 +84,7 @@ public class PlayerController {
             Observable.timer(3000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.io()).subscribe(
                     time -> {
                         var game = availableGamesManager.getGames().stream().findFirst();
-                        game.ifPresent(messageWithSender -> joinGame(messageWithSender.getMessage().getAnnouncement()));
+                        game.ifPresent(this::joinGame);
                     }
             );
         }
@@ -116,6 +121,7 @@ public class PlayerController {
                                             .setMsgSeq(0)
                                             .setRoleChange(SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
                                                     .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
+                                                    .setSenderRole(SnakesProto.NodeRole.MASTER)
                                                     .build()
                                             )
                                             .build()
@@ -129,9 +135,7 @@ public class PlayerController {
             if (deadPlayer.getRole() == SnakesProto.NodeRole.MASTER) {
                 logger.info("NORMAL saw MASTER dead, he selects DEPUTY as MASTER");
                 playersManager.getDeputy().ifPresent(
-                        deputy -> {
-                            playersManager.changeRole(new PlayerSignature(deputy), SnakesProto.NodeRole.MASTER);
-                        }
+                        deputy -> playersManager.changeRole(new PlayerSignature(deputy), SnakesProto.NodeRole.MASTER)
                 );
             }
         }
@@ -146,18 +150,20 @@ public class PlayerController {
                             playersManager.changeRole(new PlayerSignature(newDeputy), SnakesProto.NodeRole.DEPUTY);
                             // если мастер сдох, а депутат это увидел раньше и назначил нормала депутатом до того как он понял что мастер сдох
                             // то нормал-депутат как только увидит что мастер сдох станет мастером (а мастер уже есть)
-//                            unicastManager.sendPacket(
-//                                    newDeputy.getIpAddress(),
-//                                    newDeputy.getPort(),
-//                                    SnakesProto.GameMessage.newBuilder()
-//                                            .setMsgSeq(0)
-//                                            .setRoleChange(
-//                                                    SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
-//                                                            .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
-//                                                            .build()
-//                                            )
-//                                            .build()
-//                            );
+                            for (var player : playersManager.getPlayers()) {
+                                unicastManager.sendPacket(
+                                        newDeputy.getIpAddress(),
+                                        newDeputy.getPort(),
+                                        SnakesProto.GameMessage.newBuilder()
+                                                .setMsgSeq(0)
+                                                .setRoleChange(
+                                                        SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
+                                                                .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
+                                                                .build()
+                                                )
+                                                .build()
+                                );
+                            }
                         }
                 );
             }
@@ -190,13 +196,14 @@ public class PlayerController {
     private void infoWorker() {
         while (!stopped.get()) {
             logger.info(
-                    String.format("%s%s: is %s, game players: %d (%s)",
+                    String.format("%s%d (%s/%s), game players: %d (%s)",
                             stopped.get() ? "DEAD, " : "",
+                            myId,
                             name,
                             role,
                             playersManager.getPlayers().size(),
                             playersManager.getPlayers().stream()
-                                    .map(player -> player.getName() + " (" + player.getRole() + ")")
+                                    .map(player -> String.format("%d (%s/%s)", player.getId(), player.getName(), player.getRole()))
                                     .collect(Collectors.joining(", "))
                     )
             );
@@ -221,14 +228,23 @@ public class PlayerController {
             playersManager.touchPlayer(signature);
             if (role == SnakesProto.NodeRole.MASTER) {
                 if (msg.getMessage().hasJoin()) {
-                    logger.info("new player: " + msg.getMessage().getJoin().getName() + " (" + signature + ")");
+                    var playerId = playersManager.getNextPlayerId();
+                    unicastManager.sendPacket(
+                            signature.getIp(),
+                            signature.getPort(),
+                            SnakesProto.GameMessage.newBuilder()
+                                    .setMsgSeq(0)
+                                    .setAck(SnakesProto.GameMessage.AckMsg.getDefaultInstance())
+                                    .setReceiverId(playerId)
+                                    .build()
+                    );
                     if (playersManager.getDeputy().isEmpty()) {
-                        playersManager.addPlayer(
+                        playersManager.updatePlayer(
                                 signature,
                                 SnakesProto.GamePlayer.newBuilder()
                                         .setName(msg.getMessage().getJoin().getName())
                                         .setRole(SnakesProto.NodeRole.DEPUTY)
-                                        .setId(1)
+                                        .setId(playerId)
                                         .setIpAddress(msg.getIp())
                                         .setPort(msg.getPort())
                                         .setScore(0)
@@ -247,12 +263,12 @@ public class PlayerController {
                                         .build()
                         );
                     } else {
-                        playersManager.addPlayer(
+                        playersManager.updatePlayer(
                                 signature,
                                 SnakesProto.GamePlayer.newBuilder()
                                         .setName(msg.getMessage().getJoin().getName())
                                         .setRole(SnakesProto.NodeRole.NORMAL)
-                                        .setId(1)
+                                        .setId(playerId)
                                         .setIpAddress(msg.getIp())
                                         .setPort(msg.getPort())
                                         .setScore(0)
@@ -262,12 +278,14 @@ public class PlayerController {
                 }
             }
             if (role != SnakesProto.NodeRole.MASTER) {
+                if (msg.getMessage().hasAck() && msg.getMessage().hasReceiverId()) {
+                    myId = msg.getMessage().getReceiverId();
+                }
                 if (msg.getMessage().hasState()) {
                     var state = msg.getMessage().getState().getState();
                     state.getPlayers().getPlayersList().forEach(player -> playersManager.updatePlayer(
                             new PlayerSignature(player), player
                     ));
-                    playersManager.getMyself().ifPresent(gamePlayer -> role = gamePlayer.getRole());
                 }
                 if (msg.getMessage().hasRoleChange()) {
                     var roleChange = msg.getMessage().getRoleChange();
@@ -348,12 +366,16 @@ public class PlayerController {
         }
     }
 
-    private void joinGame(SnakesProto.GameMessage.AnnouncementMsg msg) {
-        var master = msg.getPlayers().getPlayersList()
-                .stream().filter(
-                        player -> player.getRole() == SnakesProto.NodeRole.MASTER
-                ).findAny();
-        master.ifPresent(gamePlayer -> joinGame(gamePlayer.getIpAddress(), gamePlayer.getPort()));
+//    private void joinGame(SnakesProto.GameMessage.AnnouncementMsg msg) {
+//        var master = msg.getPlayers().getPlayersList()
+//                .stream().filter(
+//                        player -> player.getRole() == SnakesProto.NodeRole.MASTER
+//                ).findAny();
+//        master.ifPresent(gamePlayer -> joinGame(gamePlayer.getIpAddress(), gamePlayer.getPort()));
+//    }
+
+    private void joinGame(MessageWithSender announceWrapper) {
+        joinGame(announceWrapper.getIp(), announceWrapper.getPort());
     }
 
     private void joinGame(String ip, int port) {

@@ -34,6 +34,8 @@ public class PlayersManager {
 
     private final PlayerSignature mySignature;
 
+    private int maxPlayerId = 0;
+
     public PlayersManager(PlayerSignature mySignature, Consumer<SnakesProto.GamePlayer> onPlayerDeadListener) {
         this.mySignature = mySignature;
         this.players = new HashMap<>();
@@ -54,19 +56,13 @@ public class PlayersManager {
         }
     }
 
-    void updatePlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
-//        logger.info(signature.toString());
-        players.put(
-                signature,
-                PlayerWrapper.builder()
-                        .player(player)
-                        .lastSeen(System.currentTimeMillis())
-                        .build()
-        );
+    public int getNextPlayerId() {
+        return maxPlayerId + 1;
     }
 
-    void addPlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
-//        logger.info("new player" + signature.toString());
+    void updatePlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
+//        logger.info(signature.toString());
+        maxPlayerId = Math.max(maxPlayerId, player.getId());
         players.put(
                 signature,
                 PlayerWrapper.builder()
@@ -115,12 +111,6 @@ public class PlayersManager {
     public Optional<SnakesProto.GamePlayer> getNormal() {
         return players.values().stream().map(PlayerWrapper::getPlayer).filter(
                 player -> player.getRole() == SnakesProto.NodeRole.NORMAL
-        ).findAny();
-    }
-
-    public Optional<SnakesProto.GamePlayer> getMyself() {
-        return players.values().stream().map(PlayerWrapper::getPlayer).filter(
-                player -> new PlayerSignature(player).equals(mySignature)
         ).findAny();
     }
 

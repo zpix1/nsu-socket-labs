@@ -4,7 +4,6 @@ import com.google.common.collect.EvictingQueue;
 import me.ippolitov.fit.snakes.SnakesProto;
 import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Queue;
 
@@ -16,8 +15,8 @@ public class AvailableGamesManager {
 
     private final MulticastManager multicastManager;
 
-    public AvailableGamesManager() throws IOException {
-        multicastManager = new MulticastManager();
+    public AvailableGamesManager(MulticastManager multicastManager) {
+        this.multicastManager = multicastManager;
 
         gamesListenerWorkerThread = new Thread(this::gamesListenerWorker);
         gamesListenerWorkerThread.start();

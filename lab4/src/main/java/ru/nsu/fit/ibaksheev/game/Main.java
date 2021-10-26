@@ -3,23 +3,25 @@ package ru.nsu.fit.ibaksheev.game;
 import me.ippolitov.fit.snakes.SnakesProto;
 
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.util.logging.LogManager;
 
 public class Main {
     static void recv() {
         try {
-            MulticastManager receiver = new MulticastManager();
+            MulticastManager receiver = new MulticastManager(new DatagramSocket(5000));
             var msg = receiver.receivePacket();
-            System.out.println(msg);
+            System.out.println(msg.getIp());
+            System.out.println(msg.getPort());
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
     }
 
     public static void testUnicast() throws InterruptedException, SocketException {
-        var sender = new UnicastManager(5000);
-        var receiver = new UnicastManager(6000);
+        var sender = new UnicastManager(new DatagramSocket(5000));
+        var receiver = new UnicastManager(new DatagramSocket(6000));
 
         var messageBuilder = SnakesProto.GameMessage.newBuilder()
                 .setPing(SnakesProto.GameMessage.PingMsg.getDefaultInstance());
@@ -30,7 +32,7 @@ public class Main {
     }
 
     public static void testMulticast() throws IOException {
-        var sender = new MulticastManager();
+        var sender = new MulticastManager(new DatagramSocket(5000));
 
         var message = SnakesProto.GameMessage.newBuilder()
                 .setPing(SnakesProto.GameMessage.PingMsg.getDefaultInstance())
@@ -47,6 +49,7 @@ public class Main {
     public static void main(String[] args) throws InterruptedException, IOException {
         LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
 
+//        testMulticast();
         var player1 = new PlayerController("Master roflan", 5001, SnakesProto.NodeRole.MASTER);
         var player2 = new PlayerController("Deputy roflan", 5002, SnakesProto.NodeRole.NORMAL);
         Thread.sleep(1000);
