@@ -1,12 +1,13 @@
 package ru.nsu.fit.ibaksheev.game.io;
 
-import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import lombok.Getter;
 import me.ippolitov.fit.snakes.SnakesProto;
 import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
 import ru.nsu.fit.ibaksheev.game.io.datatypes.PlayerSignature;
+import ru.nsu.fit.ibaksheev.game.snake.SnakeMasterController;
+import ru.nsu.fit.ibaksheev.game.snake.SnakeView;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
@@ -45,13 +46,30 @@ public class PlayerController {
 
     private final PlayerSignature mySignature;
 
+    @Getter
     private final Subject<MessageWithSender> newMessageSubject = PublishSubject.create();
+    @Getter
+    private final Subject<SnakeView.Control> controlSubject = PublishSubject.create();
+
+    private final SnakeMasterController snakeMasterController;
+
+    private SnakesProto.GameState state;
 
     public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException {
         this.name = name;
         this.role = role;
         mySignature = new PlayerSignature(Inet4Address.getLocalHost().getHostAddress(), listenPort);
         logger.info(name + " started with " + mySignature);
+
+
+
+        snakeMasterController = new SnakeMasterController(controlSubject);
+        state = SnakesProto.GameState.newBuilder()
+                .setStateOrder(0)
+                .setConfig(SnakesProto.GameConfig.getDefaultInstance())
+                .setPlayers(SnakesProto.GamePlayers.getDefaultInstance())
+                .build();
+
 
         DatagramSocket socket = new DatagramSocket(listenPort);
         unicastManager = new UnicastManager(socket);
@@ -344,22 +362,24 @@ public class PlayerController {
         while (true) {
             if (role == SnakesProto.NodeRole.MASTER) {
 //                logger.info("sending game state to " + playersManager.getPlayers().size() + " players");
+                var oldState = SnakesProto.GameState.newBuilder(state)
+                        .setPlayers(
+                                SnakesProto.GamePlayers.newBuilder()
+                                        .addAllPlayers(playersManager.getPlayers())
+                        )
+                        .setStateOrder(0)
+                        .build();
+                var sendState = snakeMasterController.getNextState(oldState);
+
                 var msg = SnakesProto.GameMessage.newBuilder()
                         .setState(
                                 SnakesProto.GameMessage.StateMsg.newBuilder()
-                                        .setState(SnakesProto.GameState.newBuilder()
-                                                .setConfig(SnakesProto.GameConfig.getDefaultInstance())
-                                                .setPlayers(
-                                                        SnakesProto.GamePlayers.newBuilder()
-                                                                .addAllPlayers(playersManager.getPlayers())
-                                                )
-                                                .setStateOrder(0)
-                                                .build()
-                                        )
+                                        .setState(sendState)
                                         .build()
                         )
                         .setMsgSeq(0)
                         .build();
+
                 for (var playerSignature : playersManager.getSignatures()) {
                     unicastManager.sendPacket(
                             playerSignature.getIp(),
@@ -408,7 +428,7 @@ public class PlayerController {
 //        master.ifPresent(gamePlayer -> joinGame(gamePlayer.getIpAddress(), gamePlayer.getPort()));
 //    }
 
-    private void joinGame(MessageWithSender announceWrapper) {
+    public void joinGame(MessageWithSender announceWrapper) {
         joinGame(announceWrapper.getIp(), announceWrapper.getPort());
     }
 
@@ -422,9 +442,5 @@ public class PlayerController {
                         .setMsgSeq(0)
                         .build()
         );
-    }
-
-    public Observable<MessageWithSender> getNewMessageObservable() {
-        return newMessageSubject;
     }
 }

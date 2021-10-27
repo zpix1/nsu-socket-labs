@@ -3,7 +3,10 @@ package ru.nsu.fit.ibaksheev.game.ui;
 import me.ippolitov.fit.snakes.SnakesProto;
 import ru.nsu.fit.ibaksheev.game.io.PlayerController;
 import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
+import ru.nsu.fit.ibaksheev.game.snake.SnakeView;
+import ru.nsu.fit.ibaksheev.game.snake.SnakeViewController;
 import ru.nsu.fit.ibaksheev.game.ui.components.GamesList;
+import ru.nsu.fit.ibaksheev.game.ui.components.SnakeCanvas;
 
 import javax.swing.*;
 import java.awt.*;
@@ -12,9 +15,10 @@ import java.util.logging.LogManager;
 
 public class GameUI {
     PlayerController player;
+    SnakeView snakeView;
 
     private void joinGame(MessageWithSender gameMessage) {
-        System.out.println("joined " + gameMessage);
+        player.joinGame(gameMessage);
     }
 
     private void initUI() {
@@ -50,16 +54,23 @@ public class GameUI {
         contents.add(controlPanel, BorderLayout.EAST);
         // endregion
 
+        // region snake canvas
+        contents.add((Component) snakeView, BorderLayout.WEST);
+        // endregion
+
         // Final
         frame.setContentPane(contents);
         frame.pack();
         frame.setLocationRelativeTo(null);
-        frame.setSize(400, 500);
+//        frame.setSize(400, 500);
         frame.setVisible(true);
     }
 
     GameUI() throws IOException {
         player = new PlayerController("Game Player", 5003, SnakesProto.NodeRole.NORMAL);
+        snakeView = new SnakeCanvas();
+        snakeView.setState(SnakesProto.GameState.getDefaultInstance());
+        new SnakeViewController(player, snakeView);
         SwingUtilities.invokeLater(this::initUI);
     }
 
