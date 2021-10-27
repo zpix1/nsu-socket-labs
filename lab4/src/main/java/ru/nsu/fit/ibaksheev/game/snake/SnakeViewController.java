@@ -6,6 +6,10 @@ public class SnakeViewController {
     private PlayerController playerController;
 
     public SnakeViewController(PlayerController playerController, SnakeView snakeView) {
-
+        playerController.getNewMessageObservable().subscribe(messageWithSender -> {
+            if (messageWithSender.getMessage().hasState()) {
+                snakeView.setState(messageWithSender.getMessage().getState().getState());
+            }
+        });
     }
 }

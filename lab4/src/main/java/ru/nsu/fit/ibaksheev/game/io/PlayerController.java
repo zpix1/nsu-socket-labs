@@ -1,5 +1,8 @@
 package ru.nsu.fit.ibaksheev.game.io;
 
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.PublishSubject;
+import io.reactivex.rxjava3.subjects.Subject;
 import lombok.Getter;
 import me.ippolitov.fit.snakes.SnakesProto;
 import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
@@ -41,6 +44,8 @@ public class PlayerController {
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
     private final PlayerSignature mySignature;
+
+    private final Subject<MessageWithSender> newMessageSubject = PublishSubject.create();
 
     public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException {
         this.name = name;
@@ -326,6 +331,7 @@ public class PlayerController {
                     playersManager.changeRole(signature, roleChange.getSenderRole());
                 }
             }
+            newMessageSubject.onNext(msg);
             roleLock.unlock();
         }
     }
@@ -416,5 +422,9 @@ public class PlayerController {
                         .setMsgSeq(0)
                         .build()
         );
+    }
+
+    public Observable<MessageWithSender> getNewMessageObservable() {
+        return newMessageSubject;
     }
 }
