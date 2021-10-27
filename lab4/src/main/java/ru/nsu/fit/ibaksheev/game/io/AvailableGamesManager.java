@@ -1,8 +1,8 @@
-package ru.nsu.fit.ibaksheev.game;
+package ru.nsu.fit.ibaksheev.game.io;
 
 import com.google.common.collect.EvictingQueue;
 import me.ippolitov.fit.snakes.SnakesProto;
-import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
+import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
 
 import java.util.Collection;
 import java.util.Queue;

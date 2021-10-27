@@ -1,4 +1,4 @@
-package ru.nsu.fit.ibaksheev.game;
+package ru.nsu.fit.ibaksheev.game.io;
 
 import me.ippolitov.fit.snakes.SnakesProto;
 
@@ -46,6 +46,11 @@ public class Main {
         sender.sendPacket(message);
     }
 
+    public static void killPlayer(PlayerController p) {
+        System.out.println("Killing id=" + p.getMyId());
+        p.stop();
+    }
+
     public static void main(String[] args) throws InterruptedException, IOException {
         LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
 
@@ -57,8 +62,14 @@ public class Main {
 
         Thread.sleep(11000);
 
-        System.out.println("killing");
-        player3.stop();
-        System.out.println("killed");
+        killPlayer(player2);
+
+//        Thread.sleep(15000);
+
+//        var player4 = new PlayerController("New chel", 5004, SnakesProto.NodeRole.NORMAL);
+//
+//        Thread.sleep(10000);
+//
+//        killPlayer(player2);
     }
 }

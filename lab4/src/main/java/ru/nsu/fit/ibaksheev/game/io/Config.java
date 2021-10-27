@@ -1,4 +1,4 @@
-package ru.nsu.fit.ibaksheev.game;
+package ru.nsu.fit.ibaksheev.game.io;
 
 public class Config {
     public static final String LOCALHOST_IP = "127.0.0.1";
@@ -7,4 +7,5 @@ public class Config {
     public static final int PING_INTERVAL_MS = 1000;
     static final int ANNOUNCE_INTERVAL_MS = 1000;
     static final int NODE_TIMEOUT_MS = 5000;
+    public static final int STATE_INTERVAL_MS = 100;
 }

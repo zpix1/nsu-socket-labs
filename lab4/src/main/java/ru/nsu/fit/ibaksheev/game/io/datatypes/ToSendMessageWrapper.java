@@ -1,4 +1,4 @@
-package ru.nsu.fit.ibaksheev.game.datatypes;
+package ru.nsu.fit.ibaksheev.game.io.datatypes;
 
 import lombok.Builder;
 import lombok.Getter;

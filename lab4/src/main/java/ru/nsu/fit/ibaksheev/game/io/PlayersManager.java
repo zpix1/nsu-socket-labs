@@ -1,10 +1,10 @@
-package ru.nsu.fit.ibaksheev.game;
+package ru.nsu.fit.ibaksheev.game.io;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import me.ippolitov.fit.snakes.SnakesProto;
-import ru.nsu.fit.ibaksheev.game.datatypes.PlayerSignature;
+import ru.nsu.fit.ibaksheev.game.io.datatypes.PlayerSignature;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,12 +32,11 @@ public class PlayersManager {
     private final Consumer<SnakesProto.GamePlayer> onPlayerDeadListener;
     private final Thread checkDeadWorkerThread;
 
-    private final PlayerSignature mySignature;
-
     private int maxPlayerId = 0;
+    @Setter
+    private volatile int myId = -1;
 
-    public PlayersManager(PlayerSignature mySignature, Consumer<SnakesProto.GamePlayer> onPlayerDeadListener) {
-        this.mySignature = mySignature;
+    public PlayersManager(Consumer<SnakesProto.GamePlayer> onPlayerDeadListener) {
         this.players = new HashMap<>();
         this.onPlayerDeadListener = onPlayerDeadListener;
         checkDeadWorkerThread = new Thread(this::checkDeadWorker);
@@ -122,17 +121,20 @@ public class PlayersManager {
                 break;
             }
             synchronized (players) {
+                if (myId == -1) {
+                    continue;
+                }
 //                System.out.println(players.values().stream().map(e -> e.getLastSeen().toString()).collect(Collectors.joining(", ")));
                 var currentTime = System.currentTimeMillis();
                 players.entrySet().stream()
-                        .filter(e -> e.getKey() != mySignature)
+                        .filter(e -> e.getValue().getPlayer().getId() != myId)
                         .filter(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS)
 //                        .peek(System.out::println)
                         .max((a, b) -> a.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? 1 : b.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? -1 : 0)
                         .ifPresent(e -> {
-                            logger.warning("Player dead: " + e.getValue().getPlayer().getRole());
-                            this.onPlayerDeadListener.accept(e.getValue().getPlayer());
+//                            logger.warning("Player dead: " + e.getValue().getPlayer().getRole());
                             players.remove(e.getKey());
+                            this.onPlayerDeadListener.accept(e.getValue().getPlayer());
                         });
             }
         }

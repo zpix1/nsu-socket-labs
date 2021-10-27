@@ -1,8 +1,8 @@
-package ru.nsu.fit.ibaksheev.game;
+package ru.nsu.fit.ibaksheev.game.io;
 
 import me.ippolitov.fit.snakes.SnakesProto.GameMessage;
-import ru.nsu.fit.ibaksheev.game.datatypes.MessageWithSender;
-import ru.nsu.fit.ibaksheev.game.datatypes.ToSendMessageWrapper;
+import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
+import ru.nsu.fit.ibaksheev.game.io.datatypes.ToSendMessageWrapper;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
