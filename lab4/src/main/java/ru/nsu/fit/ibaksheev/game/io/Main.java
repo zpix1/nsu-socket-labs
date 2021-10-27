@@ -5,7 +5,6 @@ import me.ippolitov.fit.snakes.SnakesProto;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.SocketException;
-import java.util.logging.LogManager;
 
 public class Main {
     static void recv() {
@@ -51,25 +50,25 @@ public class Main {
         p.stop();
     }
 
-    public static void main(String[] args) throws InterruptedException, IOException {
-        LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
-
-//        testMulticast();
-        var player1 = new PlayerController("Master roflan", 5001, SnakesProto.NodeRole.MASTER);
-        var player2 = new PlayerController("Deputy roflan", 5002, SnakesProto.NodeRole.NORMAL);
-        Thread.sleep(1000);
-        var player3 = new PlayerController("Just roflan", 5003, SnakesProto.NodeRole.NORMAL);
-
-        Thread.sleep(11000);
-
-        killPlayer(player2);
-
-//        Thread.sleep(15000);
-
-//        var player4 = new PlayerController("New chel", 5004, SnakesProto.NodeRole.NORMAL);
+//    public static void main(String[] args) throws InterruptedException, IOException {
+//        LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
 //
-//        Thread.sleep(10000);
+////        testMulticast();
+//        var player1 = new PlayerController("Master roflan", 5001, SnakesProto.NodeRole.MASTER);
+//        var player2 = new PlayerController("Deputy roflan", 5002, SnakesProto.NodeRole.NORMAL);
+//        Thread.sleep(1000);
+//        var player3 = new PlayerController("Just roflan", 5003, SnakesProto.NodeRole.NORMAL);
+//
+//        Thread.sleep(11000);
 //
 //        killPlayer(player2);
-    }
+//
+////        Thread.sleep(15000);
+//
+////        var player4 = new PlayerController("New chel", 5004, SnakesProto.NodeRole.NORMAL);
+////
+////        Thread.sleep(10000);
+////
+////        killPlayer(player2);
+//    }
 }

@@ -1,7 +1,5 @@
 package ru.nsu.fit.ibaksheev.game.io;
 
-import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.Getter;
 import me.ippolitov.fit.snakes.SnakesProto;
 import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
@@ -10,7 +8,6 @@ import ru.nsu.fit.ibaksheev.game.io.datatypes.PlayerSignature;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.Inet4Address;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -24,9 +21,11 @@ public class PlayerController {
     private final UnicastManager unicastManager;
     private final MulticastManager multicastManager;
     private final PlayersManager playersManager;
+    @Getter
     private final AvailableGamesManager availableGamesManager;
 
     private final Lock roleLock = new ReentrantLock();
+    @Getter
     private volatile SnakesProto.NodeRole role;
 
     private final Thread announceWorkerThread;
@@ -34,6 +33,7 @@ public class PlayerController {
     private final Thread listenMulticastWorkerThread;
     private final Thread sendGameStateWorkerThread;
 
+    @Getter
     private final String name;
 
     private final AtomicBoolean stopped = new AtomicBoolean(false);
@@ -42,7 +42,7 @@ public class PlayerController {
 
     private final PlayerSignature mySignature;
 
-    public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException, InterruptedException {
+    public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException {
         this.name = name;
         this.role = role;
         mySignature = new PlayerSignature(Inet4Address.getLocalHost().getHostAddress(), listenPort);
@@ -86,14 +86,14 @@ public class PlayerController {
             );
         }
 
-        if (role != SnakesProto.NodeRole.MASTER) {
-            Observable.timer(3000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.io()).subscribe(
-                    time -> {
-                        var game = availableGamesManager.getGames().stream().findFirst();
-                        game.ifPresent(this::joinGame);
-                    }
-            );
-        }
+//        if (role != SnakesProto.NodeRole.MASTER) {
+//            Observable.timer(3000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.io()).subscribe(
+//                    time -> {
+//                        var game = availableGamesManager.getGames().stream().findFirst();
+//                        game.ifPresent(this::joinGame);
+//                    }
+//            );
+//        }
     }
 
     public void stop() {
