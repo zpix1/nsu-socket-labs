@@ -55,7 +55,7 @@ public class PlayerController {
 
     private final SnakeMasterController snakeMasterController;
 
-    private SnakesProto.GameState state;
+    private volatile SnakesProto.GameState state;
 
     public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException {
         this.listenPort = listenPort;
@@ -65,7 +65,7 @@ public class PlayerController {
 
         state = SnakesProto.GameState.newBuilder()
                 .setStateOrder(0)
-                .setConfig(SnakesProto.GameConfig.getDefaultInstance())
+                .setConfig(SnakesProto.GameConfig.newBuilder().setStateDelayMs(200))
                 .setPlayers(SnakesProto.GamePlayers.getDefaultInstance())
                 .build();
 
@@ -76,12 +76,29 @@ public class PlayerController {
         playersManager = new PlayersManager(this::onPlayerDeadListener);
         availableGamesManager = new AvailableGamesManager(multicastManager);
 
-        snakeMasterController = new SnakeMasterController(controlSubject.map(control -> {
-            if (control.getPlayerId() == null) {
-                control.setPlayerId(playersManager.getMyId());
-            }
-            return control;
-        }));
+        snakeMasterController = new SnakeMasterController(
+                controlSubject.map(control -> {
+                    if (control.getPlayerId() == null) {
+                        control.setPlayerId(playersManager.getMyId());
+                    }
+                    return control;
+                }),
+                player -> {
+                    playersManager.changeRole(player.getId(), SnakesProto.NodeRole.VIEWER);
+                    unicastManager.sendPacket(
+                            player.getIpAddress(),
+                            player.getPort(),
+                            SnakesProto.GameMessage.newBuilder()
+                                    .setMsgSeq(0)
+                                    .setRoleChange(SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
+                                            .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
+                                            .setSenderRole(SnakesProto.NodeRole.MASTER)
+                                            .build()
+                                    )
+                                    .build()
+                    );
+                }
+        );
 
         controlSubject.subscribe(control -> {
             if (control.getPlayerId() == myId) {
@@ -203,6 +220,8 @@ public class PlayerController {
                 roleLock.unlock();
                 playersManager.changeRole(myId, SnakesProto.NodeRole.MASTER);
 
+                System.out.println("Eat count " + state.getFoodsList());
+
                 // если мастер сдох, а депутат это увидел раньше и назначил нормала депутатом до того как он понял, что мастер сдох
                 // то нормал-депутат как только увидит что мастер сдох, станет мастером (а мастер уже есть)
                 // WF
@@ -252,7 +271,7 @@ public class PlayerController {
                 playersManager.getMaster().ifPresent(this::sendPing);
             }
             try {
-                Thread.sleep(Config.PING_INTERVAL_MS);
+                Thread.sleep(state.getConfig().getPingDelayMs());
             } catch (InterruptedException e) {
                 break;
             }
@@ -350,6 +369,7 @@ public class PlayerController {
             if (role != SnakesProto.NodeRole.MASTER) {
                 if (msg.getMessage().hasState()) {
                     var state = msg.getMessage().getState().getState();
+                    this.state = state;
                     state.getPlayers().getPlayersList().forEach(gamePlayer -> {
                         var newPlayer = SnakesProto.GamePlayer.newBuilder(gamePlayer);
                         if (gamePlayer.getIpAddress().length() == 0) {
@@ -421,7 +441,7 @@ public class PlayerController {
             }
 
             try {
-                Thread.sleep(Config.STATE_INTERVAL_MS);
+                Thread.sleep(state.getConfig().getStateDelayMs());
             } catch (InterruptedException e) {
                 break;
             }

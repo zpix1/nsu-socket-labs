@@ -1,22 +1,32 @@
 package ru.nsu.fit.ibaksheev.game.snake;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
 import io.reactivex.rxjava3.core.Observable;
 import me.ippolitov.fit.snakes.SnakesProto;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class SnakeMasterController {
     private static final int FOOD_STATIC = 1;
     private static final int FOOD_PER_PLAYER = 1;
+    private static final int BECOME_FOOD_PERCENT = 100;
 
     private final Map<Integer, SnakesProto.Direction> steerChoices;
 
-    public SnakeMasterController(Observable<SnakeView.Control> controlObservable) {
+    private final Consumer<SnakesProto.GamePlayer> killPlayer;
+
+    public SnakeMasterController(Observable<SnakeView.Control> controlObservable, Consumer<SnakesProto.GamePlayer> killPlayer) {
         steerChoices = new ConcurrentHashMap<>();
+        this.killPlayer = killPlayer;
         controlObservable.subscribe(control -> steerChoices.put(control.getPlayerId(), control.getDirection()));
     }
 
@@ -77,6 +87,27 @@ public class SnakeMasterController {
         };
     }
 
+    private void iterateSnake(SnakesProto.GameState.Snake snake, BiConsumer<SnakesProto.GameState.Coord, Boolean> callback) {
+        int x = 0, y = 0;
+        var firstPoint = true;
+        for (var point : snake.getPointsList()) {
+            var ax = x + point.getX();
+            var ay = y + point.getY();
+
+            var coord = SnakesProto.GameState.Coord.newBuilder()
+                    .setX(ax)
+                    .setY(ay)
+                    .build();
+
+            callback.accept(coord, firstPoint);
+
+            x = ax;
+            y = ay;
+
+            firstPoint = false;
+        }
+    }
+
     public SnakesProto.GameState getNextState(SnakesProto.GameState oldState) {
         var newStateBuilder = SnakesProto.GameState.newBuilder(oldState);
 
@@ -96,42 +127,100 @@ public class SnakeMasterController {
         for (var playerId : players.keySet()) {
             if (!snakes.containsKey(playerId)) {
                 var player = players.get(playerId);
-                snakes.put(playerId,
-                        SnakesProto.GameState.Snake.newBuilder()
-                                .addPoints(
-                                        SnakesProto.GameState.Coord.newBuilder()
-                                                .setX(player.getId())
-                                                .setY(player.getId())
-                                                .build()
-                                )
-                                .setState(SnakesProto.GameState.Snake.SnakeState.ALIVE)
-                                .setHeadDirection(steerChoices.getOrDefault(player.getId(), SnakesProto.Direction.DOWN))
-                                .setPlayerId(player.getId())
-                                .build()
-                );
+                if (player.getRole() != SnakesProto.NodeRole.VIEWER) {
+                    snakes.put(playerId,
+                            SnakesProto.GameState.Snake.newBuilder()
+                                    .addPoints(
+                                            SnakesProto.GameState.Coord.newBuilder()
+                                                    .setX(player.getId())
+                                                    .setY(player.getId())
+                                                    .build()
+                                    )
+                                    .setState(SnakesProto.GameState.Snake.SnakeState.ALIVE)
+                                    .setHeadDirection(steerChoices.getOrDefault(player.getId(), SnakesProto.Direction.DOWN))
+                                    .setPlayerId(player.getId())
+                                    .build()
+                    );
+                }
             }
         }
 
+        // move snakes and eat foods
         var allFoods = new HashSet<>(oldState.getFoodsList());
-        newStateBuilder.clearSnakes();
-        for (var snake : snakes.values()) {
+        for (var entry : snakes.entrySet()) {
+            var snake = entry.getValue();
             var eatenFood = oldState.getFoodsList().stream().filter(food -> food.equals(snake.getPoints(0))).findAny();
-            newStateBuilder.addSnakes(
-                    moveSnake(snake,
-                            steerChoices.getOrDefault(snake.getPlayerId(), snake.getHeadDirection()),
-                            oldState.getConfig().getWidth(),
-                            oldState.getConfig().getHeight(),
-                            eatenFood.isPresent()
-                    )
-            );
+            entry.setValue(moveSnake(snake,
+                    steerChoices.getOrDefault(snake.getPlayerId(), snake.getHeadDirection()),
+                    oldState.getConfig().getWidth(),
+                    oldState.getConfig().getHeight(),
+                    eatenFood.isPresent()
+            ));
             eatenFood.ifPresent(allFoods::remove);
         }
 
+        // generate map
+        HashMap<Integer, SnakesProto.GameState.Snake> deadSnakes = new HashMap<>();
+        Multimap<SnakesProto.GameState.Coord, Integer> map = ArrayListMultimap.create();
+
+        for (var entry : snakes.entrySet()) {
+            var snake = entry.getValue();
+            var playerId = entry.getKey();
+            iterateSnake(snake, (coord, isHead) -> {
+                if (isHead) {
+                    var whoKilledId = map.get(coord);
+                    if (!whoKilledId.isEmpty()) {
+                        killPlayer.accept(players.get(entry.getKey()));
+                        deadSnakes.put(playerId, snake);
+                        entry.setValue(null);
+                        return;
+                    }
+                }
+
+                map.put(coord, playerId);
+            });
+        }
+        snakes.values().removeIf(Objects::isNull);
+        for (var entry : snakes.entrySet()) {
+            var who = map.get(entry.getValue().getPoints(0));
+            if (who.size() > 1) {
+                // check who killed id
+                killPlayer.accept(players.get(entry.getKey()));
+                deadSnakes.put(entry.getKey(), entry.getValue());
+                entry.setValue(null);
+            }
+        }
+        snakes.values().removeIf(Objects::isNull);
+        newStateBuilder.clearSnakes();
+        for (var snake : snakes.values()) {
+            newStateBuilder.addSnakes(snake);
+        }
+
+        // add dead snakes
+        for (var deadSnake : deadSnakes.values()) {
+            iterateSnake(deadSnake, (coord, isHead) -> {
+                if (ThreadLocalRandom.current().nextInt(0, 100) < oldState.getConfig().getDeadFoodProb() * 100) {
+                    allFoods.add(coord);
+                }
+            });
+        }
+        // set dead players
+        var newPlayers = SnakesProto.GamePlayers.newBuilder();
+        for (var player : oldState.getPlayers().getPlayersList()) {
+            if (deadSnakes.containsKey(player.getId())) {
+                newPlayers.addPlayers(SnakesProto.GamePlayer.newBuilder(player).setRole(SnakesProto.NodeRole.VIEWER).build());
+            } else {
+                newPlayers.addPlayers(player);
+            }
+        }
+        newStateBuilder.setPlayers(newPlayers);
+
+        // add foods
         newStateBuilder.clearFoods();
         for (var food : allFoods) {
             newStateBuilder.addFoods(food);
         }
-        var foodCount = FOOD_STATIC + (FOOD_PER_PLAYER * snakes.size());
+        var foodCount = oldState.getConfig().getFoodStatic() + (oldState.getConfig().getFoodPerPlayer() * snakes.size());
         for (var i = 0; i < foodCount - allFoods.size(); i++) {
             newStateBuilder.addFoods(SnakesProto.GameState.Coord.newBuilder()
                     .setX(ThreadLocalRandom.current().nextInt(0, oldState.getConfig().getWidth()))
