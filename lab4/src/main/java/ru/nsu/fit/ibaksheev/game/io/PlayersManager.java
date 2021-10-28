@@ -55,6 +55,10 @@ public class PlayersManager {
         checkDeadWorkerThread.interrupt();
     }
 
+    public Optional<Integer> getIdBySignature(PlayerSignature signature) {
+        return players.values().stream().filter(playerWrapper -> new PlayerSignature(playerWrapper.getPlayer()).equals(signature)).map(playerWrapper -> playerWrapper.getPlayer().getId()).findAny();
+    }
+
     void touchPlayer(PlayerSignature signature) {
         players.values().stream().filter(playerWrapper -> new PlayerSignature(playerWrapper.getPlayer()).equals(signature)).findAny().ifPresent(
                 playerWrapper -> playerWrapper.setLastSeen(System.currentTimeMillis())

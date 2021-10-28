@@ -16,9 +16,22 @@ public class SnakeCanvas extends JPanel implements SnakeView {
 
     private SnakesProto.GameState state;
 
+    private static final Color FOOD_COLOR = Color.RED;
+
+    private static final Color[] SNAKE_COLORS = {
+            Color.BLUE,
+            Color.YELLOW,
+            Color.LIGHT_GRAY,
+            Color.GREEN,
+            Color.CYAN,
+            Color.ORANGE,
+            Color.MAGENTA,
+            Color.PINK,
+    };
+
     public SnakeCanvas(Subject<Control> controlSubject) {
-        canvasWidth = 500;
-        canvasHeight = 500;
+        canvasWidth = 405;
+        canvasHeight = 305;
         setSize(canvasWidth, canvasHeight);
         setPreferredSize(new Dimension(canvasWidth, canvasHeight));
 
@@ -72,10 +85,31 @@ public class SnakeCanvas extends JPanel implements SnakeView {
         }
 
         for (var snake: state.getSnakesList()) {
+            canvas.setStroke(new BasicStroke(4f));
+            var firstPoint = true;
+            int x = 0, y = 0;
             for (var point: snake.getPointsList()) {
-                canvas.fillRect(point.getX() * cellWidth, point.getY() * cellHeight, cellWidth, cellHeight);
-                break;
+                canvas.setColor(Color.BLACK);
+                var ax = x + point.getX();
+                var ay = y + point.getY();
+
+                if (firstPoint) {
+                    canvas.drawRect(ax * cellWidth, ay * cellHeight, cellWidth, cellHeight);
+                }
+
+                canvas.setColor(SNAKE_COLORS[snake.getPlayerId() % SNAKE_COLORS.length]);
+                canvas.fillRect(ax * cellWidth, ay * cellHeight, cellWidth, cellHeight);
+
+                x = ax;
+                y = ay;
+
+                firstPoint = false;
             }
+        }
+
+        canvas.setColor(FOOD_COLOR);
+        for (var food: state.getFoodsList()) {
+            canvas.fillRect(food.getX() * cellWidth, food.getY() * cellHeight, cellWidth, cellHeight);
         }
     }
 

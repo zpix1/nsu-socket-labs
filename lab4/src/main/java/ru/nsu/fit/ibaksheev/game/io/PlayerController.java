@@ -83,6 +83,20 @@ public class PlayerController {
             return control;
         }));
 
+        controlSubject.subscribe(control -> {
+            if (control.getPlayerId() == myId) {
+                playersManager.getMaster().ifPresent(master -> {
+                    if (master.getId() != myId) {
+                        unicastManager.sendPacket(master.getIpAddress(), master.getPort(), SnakesProto.GameMessage.newBuilder()
+                                .setMsgSeq(0)
+                                .setSteer(SnakesProto.GameMessage.SteerMsg.newBuilder().setDirection(control.getDirection()))
+                                .build()
+                        );
+                    }
+                });
+            }
+        });
+
         new Thread(this::infoWorker).start();
         new Thread(this::pingWorker).start();
 
@@ -100,7 +114,6 @@ public class PlayerController {
 
         myId = playersManager.getNextPlayerId();
         playersManager.setMyId(myId);
-
 
 
 //        if (role != SnakesProto.NodeRole.MASTER) {
@@ -281,6 +294,11 @@ public class PlayerController {
             playersManager.touchPlayer(signature);
             roleLock.lock();
             if (role == SnakesProto.NodeRole.MASTER) {
+                if (msg.getMessage().hasSteer()) {
+                    playersManager.getIdBySignature(signature).ifPresent(id -> controlSubject.onNext(
+                            new SnakeView.Control(id, msg.getMessage().getSteer().getDirection())
+                    ));
+                }
                 if (msg.getMessage().hasJoin()) {
                     var playerId = playersManager.getNextPlayerId();
                     unicastManager.sendPacket(

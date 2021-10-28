@@ -70,6 +70,7 @@ public class GameUI {
         // Final
         frame.setContentPane(contents);
         frame.pack();
+        frame.setResizable(false);
         frame.setLocationRelativeTo(null);
         frame.setSize(1000, 600);
         frame.setVisible(true);
@@ -88,7 +89,6 @@ public class GameUI {
         if (i == 10) {
             throw new RuntimeException("All ports are taken");
         }
-        player.getControlSubject().subscribe(x -> System.out.println("from game ui" + x));
         snakeView = new SnakeCanvas(player.getControlSubject());
         snakeView.setState(SnakesProto.GameState.getDefaultInstance());
         new SnakeViewController(player, snakeView);
