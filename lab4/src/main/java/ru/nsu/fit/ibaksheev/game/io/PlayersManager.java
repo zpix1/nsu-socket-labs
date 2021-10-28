@@ -1,5 +1,8 @@
 package ru.nsu.fit.ibaksheev.game.io;
 
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
+import io.reactivex.rxjava3.subjects.Subject;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,6 +13,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -25,6 +29,9 @@ public class PlayersManager {
         private Long lastSeen;
     }
 
+    @Getter
+    private Subject<Collection<SnakesProto.GamePlayer>> playersSubject = BehaviorSubject.create();
+
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
     private final HashMap<PlayerSignature, PlayerWrapper> players;
@@ -34,6 +41,7 @@ public class PlayersManager {
 
     private int maxPlayerId = 0;
     @Setter
+    @Getter
     private volatile int myId = -1;
 
     public PlayersManager(Consumer<SnakesProto.GamePlayer> onPlayerDeadListener) {
@@ -41,6 +49,7 @@ public class PlayersManager {
         this.onPlayerDeadListener = onPlayerDeadListener;
         checkDeadWorkerThread = new Thread(this::checkDeadWorker);
         checkDeadWorkerThread.start();
+        Observable.interval(500, TimeUnit.MILLISECONDS).subscribe(time -> playersSubject.onNext(getPlayers()));
     }
 
     void stop() {

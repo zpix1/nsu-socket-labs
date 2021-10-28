@@ -9,7 +9,6 @@ import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
 
 public class GamesList extends JList<String> {
-
     public GamesList(AvailableGamesManager availableGamesManager, Consumer<MessageWithSender> onJoinListener) {
         super();
         setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -33,7 +32,7 @@ public class GamesList extends JList<String> {
                         String.format("%s:%d %d players",
                                 messageWithSender.getIp(),
                                 messageWithSender.getPort(),
-                                messageWithSender.getMessage().getState().getState().getPlayers().getPlayersCount()
+                                messageWithSender.getMessage().getAnnouncement().getPlayers().getPlayersCount()
                         )
                 ).toArray(String[]::new));
             }

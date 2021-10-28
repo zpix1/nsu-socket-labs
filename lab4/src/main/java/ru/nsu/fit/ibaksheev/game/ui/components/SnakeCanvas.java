@@ -10,16 +10,18 @@ import javax.swing.*;
 import java.awt.*;
 
 public class SnakeCanvas extends JPanel implements SnakeView {
-    private static final int CANVAS_WIDTH = 500;
-    private static final int CANVAS_HEIGHT = 500;
+    private final int canvasWidth;
+    private final int canvasHeight;
 
-    private Subject<Control> controlSubject = PublishSubject.create();
+    private final Subject<Control> controlSubject = PublishSubject.create();
 
     private SnakesProto.GameState state;
 
     public SnakeCanvas() {
-        setSize(CANVAS_WIDTH, CANVAS_HEIGHT);
-        setPreferredSize(new Dimension(CANVAS_WIDTH, CANVAS_HEIGHT));
+        canvasWidth = 500;
+        canvasHeight = 500;
+        setSize(canvasWidth, canvasHeight);
+        setPreferredSize(new Dimension(canvasWidth, canvasHeight));
     }
 
     @Override
@@ -36,10 +38,10 @@ public class SnakeCanvas extends JPanel implements SnakeView {
         int width = state.getConfig().getWidth();
         int height = state.getConfig().getHeight();
 
-        int cellWidth = CANVAS_WIDTH / width;
-        int cellHeight = CANVAS_HEIGHT / height;
+        int cellWidth = canvasWidth / width;
+        int cellHeight = canvasHeight / height;
 
-        canvas.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        canvas.clearRect(0, 0, canvasWidth, canvasHeight);
         canvas.setStroke(new BasicStroke(0.5f));
         canvas.setColor(Color.BLACK);
 

@@ -19,11 +19,13 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class PlayerController {
+    private final int listenPort;
     @Getter
     private int myId;
 
     private final UnicastManager unicastManager;
     private final MulticastManager multicastManager;
+    @Getter
     private final PlayersManager playersManager;
     @Getter
     private final AvailableGamesManager availableGamesManager;
@@ -50,18 +52,20 @@ public class PlayerController {
     private final Subject<MessageWithSender> newMessageSubject = PublishSubject.create();
     @Getter
     private final Subject<SnakeView.Control> controlSubject = PublishSubject.create();
+    @Getter
+    private final Subject<SnakesProto.NodeRole> roleSubject = PublishSubject.create();
 
     private final SnakeMasterController snakeMasterController;
 
     private SnakesProto.GameState state;
 
     public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException {
+        this.listenPort = listenPort;
         this.name = name;
         this.role = role;
+        roleSubject.onNext(role);
         mySignature = new PlayerSignature(Inet4Address.getLocalHost().getHostAddress(), listenPort);
         logger.info(name + " started with " + mySignature);
-
-
 
         snakeMasterController = new SnakeMasterController(controlSubject);
         state = SnakesProto.GameState.newBuilder()
@@ -95,19 +99,7 @@ public class PlayerController {
         myId = playersManager.getNextPlayerId();
         playersManager.setMyId(myId);
 
-        if (role == SnakesProto.NodeRole.MASTER) {
-            playersManager.updatePlayer(
-                    mySignature,
-                    SnakesProto.GamePlayer.newBuilder()
-                            .setName(name)
-                            .setId(myId)
-                            .setIpAddress(mySignature.getIp())
-                            .setPort(listenPort)
-                            .setScore(0)
-                            .setRole(role)
-                            .build()
-            );
-        }
+
 
 //        if (role != SnakesProto.NodeRole.MASTER) {
 //            Observable.timer(3000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.io()).subscribe(
@@ -117,6 +109,23 @@ public class PlayerController {
 //                    }
 //            );
 //        }
+    }
+
+    public void createGame() {
+        roleLock.lock();
+        role = SnakesProto.NodeRole.MASTER;
+        playersManager.updatePlayer(
+                mySignature,
+                SnakesProto.GamePlayer.newBuilder()
+                        .setName(name)
+                        .setId(myId)
+                        .setIpAddress(mySignature.getIp())
+                        .setPort(listenPort)
+                        .setScore(0)
+                        .setRole(role)
+                        .build()
+        );
+        roleLock.unlock();
     }
 
     public void stop() {
@@ -176,6 +185,7 @@ public class PlayerController {
 
                 roleLock.lock();
                 role = SnakesProto.NodeRole.MASTER;
+                roleSubject.onNext(role);
                 roleLock.unlock();
                 playersManager.changeRole(mySignature, SnakesProto.NodeRole.MASTER);
 
@@ -343,6 +353,7 @@ public class PlayerController {
                 if (roleChange.hasReceiverRole()) {
                     logger.info("switched from " + role + " to " + roleChange.getReceiverRole());
                     role = roleChange.getReceiverRole();
+                    roleSubject.onNext(role);
                 }
                 if (roleChange.hasSenderRole()) {
                     logger.info("switched sender to " + roleChange.getSenderRole());
