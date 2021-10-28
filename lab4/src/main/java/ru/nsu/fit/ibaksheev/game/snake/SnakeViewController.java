@@ -11,6 +11,5 @@ public class SnakeViewController {
                 snakeView.setState(messageWithSender.getMessage().getState().getState());
             }
         });
-        snakeView.getControlObservable().subscribe(System.out::println);
     }
 }

@@ -40,7 +40,7 @@ public class GameUI {
 
         playersPanel.add(
 //                new JScrollPane(
-                        new PlayersTable(player.getPlayersManager())
+                new PlayersTable(player.getPlayersManager())
 //                )
         );
 
@@ -78,15 +78,21 @@ public class GameUI {
     }
 
     GameUI() throws IOException {
-        for (int i = 0; i < 10; i++) {
+        var i = 0;
+        for (i = 0; i < 10; i++) {
             try {
                 player = new PlayerController("Game Player", 5000 + i, SnakesProto.NodeRole.NORMAL);
             } catch (BindException e) {
+                e.printStackTrace();
                 continue;
             }
             break;
         }
-        snakeView = new SnakeCanvas();
+        if (i == 10) {
+            throw new RuntimeException("All ports are taken");
+        }
+        player.getControlSubject().subscribe(x -> System.out.println("from game ui" + x));
+        snakeView = new SnakeCanvas(player.getControlSubject());
         snakeView.setState(SnakesProto.GameState.getDefaultInstance());
         new SnakeViewController(player, snakeView);
         SwingUtilities.invokeLater(this::initUI);

@@ -1,15 +1,16 @@
 package ru.nsu.fit.ibaksheev.game.snake;
 
-import io.reactivex.rxjava3.core.Observable;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import me.ippolitov.fit.snakes.SnakesProto;
 
 public interface SnakeView {
-    interface Control {
-        int getPlayerId();
-        SnakesProto.Direction getDirection();
+    @AllArgsConstructor
+    @Data
+    class Control {
+        private Integer playerId;
+        private SnakesProto.Direction direction;
     }
 
     void setState(SnakesProto.GameState state);
-
-    Observable<Control> getControlObservable();
 }

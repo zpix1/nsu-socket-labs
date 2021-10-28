@@ -67,7 +67,8 @@ public class PlayerController {
         mySignature = new PlayerSignature(Inet4Address.getLocalHost().getHostAddress(), listenPort);
         logger.info(name + " started with " + mySignature);
 
-        snakeMasterController = new SnakeMasterController(controlSubject);
+
+
         state = SnakesProto.GameState.newBuilder()
                 .setStateOrder(0)
                 .setConfig(SnakesProto.GameConfig.getDefaultInstance())
@@ -80,6 +81,13 @@ public class PlayerController {
         multicastManager = new MulticastManager(socket);
         playersManager = new PlayersManager(this::onPlayerDeadListener);
         availableGamesManager = new AvailableGamesManager(multicastManager);
+
+        snakeMasterController = new SnakeMasterController(controlSubject.map(control -> {
+            if (control.getPlayerId() == null) {
+                control.setPlayerId(playersManager.getMyId());
+            }
+            return control;
+        }));
 
         new Thread(this::infoWorker).start();
         new Thread(this::pingWorker).start();
@@ -188,7 +196,8 @@ public class PlayerController {
                 roleSubject.onNext(role);
                 roleLock.unlock();
                 playersManager.changeRole(mySignature, SnakesProto.NodeRole.MASTER);
-
+                System.out.println(mySignature);
+                System.out.println(playersManager.getPlayers());
 
                 // если мастер сдох, а депутат это увидел раньше и назначил нормала депутатом до того как он понял, что мастер сдох
                 // то нормал-депутат как только увидит что мастер сдох, станет мастером (а мастер уже есть)
@@ -219,11 +228,6 @@ public class PlayerController {
                     );
                     hasDeputy = true;
                 }
-
-                playersManager.getNormal().ifPresent(
-                        newDeputy -> {
-                        }
-                );
             }
         }
     }
@@ -380,12 +384,13 @@ public class PlayerController {
                         )
                         .setStateOrder(0)
                         .build();
-                var sendState = snakeMasterController.getNextState(oldState);
+
+                state = snakeMasterController.getNextState(oldState);
 
                 var msg = SnakesProto.GameMessage.newBuilder()
                         .setState(
                                 SnakesProto.GameMessage.StateMsg.newBuilder()
-                                        .setState(sendState)
+                                        .setState(state)
                                         .build()
                         )
                         .setMsgSeq(0)
