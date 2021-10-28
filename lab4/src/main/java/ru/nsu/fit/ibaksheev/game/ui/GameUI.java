@@ -32,7 +32,7 @@ public class GameUI {
         contents.setLayout(new BorderLayout());
 
         // region control panel
-        var controlPanel = new JPanel(new GridLayout(3, 1));
+        var controlPanel = new JPanel(new GridLayout(2, 1));
 
         var playersPanel = new JPanel(new GridLayout(4, 1));
         playersPanel.setBorder(BorderFactory.createTitledBorder("Players"));
@@ -70,9 +70,9 @@ public class GameUI {
         // Final
         frame.setContentPane(contents);
         frame.pack();
+        frame.setSize(865, 330);
         frame.setResizable(false);
         frame.setLocationRelativeTo(null);
-        frame.setSize(1000, 600);
         frame.setVisible(true);
     }
 

@@ -57,6 +57,12 @@ public class PlayerController {
 
     private volatile SnakesProto.GameState state;
 
+    void setRole(SnakesProto.NodeRole role) {
+        roleLock.lock();
+        this.role = role;
+        roleLock.unlock();
+    }
+
     public PlayerController(String name, int listenPort, SnakesProto.NodeRole role) throws IOException {
         this.listenPort = listenPort;
         this.name = name;
@@ -84,19 +90,20 @@ public class PlayerController {
                     return control;
                 }),
                 player -> {
-                    playersManager.changeRole(player.getId(), SnakesProto.NodeRole.VIEWER);
-                    unicastManager.sendPacket(
-                            player.getIpAddress(),
-                            player.getPort(),
-                            SnakesProto.GameMessage.newBuilder()
-                                    .setMsgSeq(0)
-                                    .setRoleChange(SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
-                                            .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
-                                            .setSenderRole(SnakesProto.NodeRole.MASTER)
-                                            .build()
-                                    )
-                                    .build()
-                    );
+//                    setRole(SnakesProto.NodeRole.VIEWER);
+////                    playersManager.changeRole(player.getId(), SnakesProto.NodeRole.VIEWER);
+//                    unicastManager.sendPacket(
+//                            player.getIpAddress(),
+//                            player.getPort(),
+//                            SnakesProto.GameMessage.newBuilder()
+//                                    .setMsgSeq(0)
+//                                    .setSenderId(myId)
+//                                    .setRoleChange(SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
+//                                            .setSenderRole(SnakesProto.NodeRole.VIEWER)
+//                                            .build()
+//                                    )
+//                                    .build()
+//                    );
                 }
         );
 
@@ -421,7 +428,7 @@ public class PlayerController {
                         .build();
 
                 state = snakeMasterController.getNextState(oldState);
-                state.getPlayers().getPlayersList().forEach(playersManager::updatePlayer);
+                state.getPlayers().getPlayersList().forEach(playersManager::updatePlayerWithoutTouch);
 
                 var msg = SnakesProto.GameMessage.newBuilder()
                         .setState(

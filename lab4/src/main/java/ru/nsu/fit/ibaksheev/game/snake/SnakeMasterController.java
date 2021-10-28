@@ -175,7 +175,9 @@ public class SnakeMasterController {
                 if (isHead) {
                     var whoKilledId = map.get(coord);
                     if (!whoKilledId.isEmpty()) {
-                        killPlayer.accept(players.get(entry.getKey()));
+                        if (players.get(playerId).getRole() != SnakesProto.NodeRole.MASTER) {
+                            killPlayer.accept(players.get(entry.getKey()));
+                        }
                         deadSnakes.put(playerId, snake);
                         entry.setValue(null);
                         return;
@@ -190,7 +192,9 @@ public class SnakeMasterController {
             var who = map.get(entry.getValue().getPoints(0));
             if (who.size() > 1) {
                 // check who killed id
-                killPlayer.accept(players.get(entry.getKey()));
+                if (players.get(entry.getKey()).getRole() != SnakesProto.NodeRole.MASTER) {
+                    killPlayer.accept(players.get(entry.getKey()));
+                }
                 deadSnakes.put(entry.getKey(), entry.getValue());
                 entry.setValue(null);
             }
@@ -212,7 +216,7 @@ public class SnakeMasterController {
         // set dead players
         var newPlayers = SnakesProto.GamePlayers.newBuilder();
         for (var player : players.values()) {
-            if (deadSnakes.containsKey(player.getId())) {
+            if (deadSnakes.containsKey(player.getId()) && player.getRole() != SnakesProto.NodeRole.MASTER) {
                 newPlayers.addPlayers(SnakesProto.GamePlayer.newBuilder(player).setRole(SnakesProto.NodeRole.VIEWER).build());
             } else {
                 newPlayers.addPlayers(player);

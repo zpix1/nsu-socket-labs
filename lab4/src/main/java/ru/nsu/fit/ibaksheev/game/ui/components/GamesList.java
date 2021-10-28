@@ -6,6 +6,7 @@ import ru.nsu.fit.ibaksheev.game.io.datatypes.MessageWithSender;
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.function.Consumer;
 
 public class GamesList extends JList<String> {
@@ -28,7 +29,8 @@ public class GamesList extends JList<String> {
                 } catch (InterruptedException e) {
                     break;
                 }
-                setListData(availableGamesManager.getAllGames().stream().map(messageWithSender ->
+                var copy = new ArrayList<>(availableGamesManager.getAllGames());
+                setListData(copy.stream().map(messageWithSender ->
                         String.format("%s:%d %d players",
                                 messageWithSender.getIp(),
                                 messageWithSender.getPort(),

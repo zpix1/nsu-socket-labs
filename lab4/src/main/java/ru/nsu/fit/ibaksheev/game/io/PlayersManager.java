@@ -83,6 +83,20 @@ public class PlayersManager {
         }
     }
 
+    void updatePlayerWithoutTouch(SnakesProto.GamePlayer player) {
+//        logger.info(signature.toString());
+        maxPlayerId = Math.max(maxPlayerId, player.getId());
+        synchronized (players) {
+            players.put(
+                    player.getId(),
+                    PlayerWrapper.builder()
+                            .player(player)
+                            .lastSeen(players.containsKey(player.getId()) ? players.get(player.getId()).getLastSeen() : System.currentTimeMillis())
+                            .build()
+            );
+        }
+    }
+
     void changeRole(int playerId, SnakesProto.NodeRole role) {
         synchronized (players) {
             var player = players.get(playerId);
