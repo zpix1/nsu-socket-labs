@@ -156,7 +156,12 @@ public class SnakeMasterController {
                     oldState.getConfig().getHeight(),
                     eatenFood.isPresent()
             ));
-            eatenFood.ifPresent(allFoods::remove);
+            eatenFood.ifPresent(food -> {
+                allFoods.remove(food);
+                var player = players.get(snake.getPlayerId());
+                // System.out.println(player.getScore());
+                players.put(snake.getPlayerId(), SnakesProto.GamePlayer.newBuilder(player).setScore(player.getScore() + 10).build());
+            });
         }
 
         // generate map
@@ -206,7 +211,7 @@ public class SnakeMasterController {
         }
         // set dead players
         var newPlayers = SnakesProto.GamePlayers.newBuilder();
-        for (var player : oldState.getPlayers().getPlayersList()) {
+        for (var player : players.values()) {
             if (deadSnakes.containsKey(player.getId())) {
                 newPlayers.addPlayers(SnakesProto.GamePlayer.newBuilder(player).setRole(SnakesProto.NodeRole.VIEWER).build());
             } else {
@@ -228,6 +233,7 @@ public class SnakeMasterController {
                     .build()
             );
         }
+
 
         return newStateBuilder.build();
     }

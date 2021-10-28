@@ -16,7 +16,7 @@ public class GamesList extends JList<String> {
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     int selected = locationToIndex(e.getPoint());
-                    System.out.println(selected);
+                    // System.out.println(selected);
                     onJoinListener.accept(availableGamesManager.getAllGames().toArray(MessageWithSender[]::new)[selected]);
                 }
             }

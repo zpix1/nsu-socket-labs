@@ -11,14 +11,14 @@ public class Main {
         try {
             MulticastManager receiver = new MulticastManager(new DatagramSocket(5000));
             var msg = receiver.receivePacket();
-            System.out.println(msg.getIp());
-            System.out.println(msg.getPort());
+            // System.out.println(msg.getIp());
+            // System.out.println(msg.getPort());
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
     }
 
-    public static void testUnicast() throws InterruptedException, SocketException {
+    public static void testUnicast() throws SocketException {
         var sender = new UnicastManager(new DatagramSocket(5000));
         var receiver = new UnicastManager(new DatagramSocket(6000));
 
@@ -27,7 +27,7 @@ public class Main {
 
         sender.sendPacket("localhost", 6000, messageBuilder.build());
 
-        System.out.println(receiver.receivePacket().getMessage());
+        // System.out.println(receiver.receivePacket().getMessage());
     }
 
     public static void testMulticast() throws IOException {
@@ -46,7 +46,7 @@ public class Main {
     }
 
     public static void killPlayer(PlayerController p) {
-        System.out.println("Killing id=" + p.getMyId());
+        // System.out.println("Killing id=" + p.getMyId());
         p.stop();
     }
 

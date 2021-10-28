@@ -65,7 +65,7 @@ public class PlayerController {
 
         state = SnakesProto.GameState.newBuilder()
                 .setStateOrder(0)
-                .setConfig(SnakesProto.GameConfig.newBuilder().setStateDelayMs(200))
+                .setConfig(SnakesProto.GameConfig.newBuilder().setStateDelayMs(100))
                 .setPlayers(SnakesProto.GamePlayers.getDefaultInstance())
                 .build();
 
@@ -212,7 +212,7 @@ public class PlayerController {
         if (role == SnakesProto.NodeRole.DEPUTY) {
             if (deadPlayer.getRole() == SnakesProto.NodeRole.MASTER) {
                 logger.info("DEPUTY saw MASTER dead, he becomes MASTER");
-                System.out.println(playersManager.getPlayers().size());
+                // System.out.println(playersManager.getPlayers().size());
 
                 roleLock.lock();
                 role = SnakesProto.NodeRole.MASTER;
@@ -220,7 +220,7 @@ public class PlayerController {
                 roleLock.unlock();
                 playersManager.changeRole(myId, SnakesProto.NodeRole.MASTER);
 
-                System.out.println("Eat count " + state.getFoodsList());
+                // System.out.println("Eat count " + state.getFoodsList());
 
                 // если мастер сдох, а депутат это увидел раньше и назначил нормала депутатом до того как он понял, что мастер сдох
                 // то нормал-депутат как только увидит что мастер сдох, станет мастером (а мастер уже есть)
@@ -233,7 +233,7 @@ public class PlayerController {
                     if (!hasDeputy) {
                         playersManager.changeRole(player.getId(), SnakesProto.NodeRole.DEPUTY);
                     }
-                    System.out.printf("Telling %s he is %s%n", player.getName(), !hasDeputy ? SnakesProto.NodeRole.DEPUTY : SnakesProto.NodeRole.NORMAL);
+                    // System.out.printf("Telling %s he is %s%n", player.getName(), !hasDeputy ? SnakesProto.NodeRole.DEPUTY : SnakesProto.NodeRole.NORMAL);
                     unicastManager.sendPacket(
                             player.getIpAddress(),
                             player.getPort(),
@@ -421,6 +421,7 @@ public class PlayerController {
                         .build();
 
                 state = snakeMasterController.getNextState(oldState);
+                state.getPlayers().getPlayersList().forEach(playersManager::updatePlayer);
 
                 var msg = SnakesProto.GameMessage.newBuilder()
                         .setState(

@@ -132,12 +132,12 @@ public class PlayersManager {
                 if (myId == -1) {
                     continue;
                 }
-//                System.out.println(players.values().stream().map(e -> e.getLastSeen().toString()).collect(Collectors.joining(", ")));
+//                // System.out.println(players.values().stream().map(e -> e.getLastSeen().toString()).collect(Collectors.joining(", ")));
                 var currentTime = System.currentTimeMillis();
                 players.entrySet().stream()
                         .filter(e -> e.getValue().getPlayer().getId() != myId)
                         .filter(e -> currentTime - e.getValue().getLastSeen() > Config.NODE_TIMEOUT_MS)
-//                        .peek(System.out::println)
+//                        .peek(// System.out::println)
                         .max((a, b) -> a.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? 1 : b.getValue().getPlayer().getRole() == SnakesProto.NodeRole.MASTER ? -1 : 0)
                         .ifPresent(e -> {
 //                            logger.warning("Player dead: " + e.getValue().getPlayer().getRole());
