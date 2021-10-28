@@ -55,9 +55,7 @@ public class GameUI {
                 )
         );
         var createButton = new JButton("Create game");
-        createButton.addActionListener(v -> {
-            player.createGame();
-        });
+        createButton.addActionListener(v -> player.createGame());
         joinPanel.add(createButton);
 
         controlPanel.add(joinPanel);
@@ -83,7 +81,6 @@ public class GameUI {
             try {
                 player = new PlayerController("Game Player", 5000 + i, SnakesProto.NodeRole.NORMAL);
             } catch (BindException e) {
-                e.printStackTrace();
                 continue;
             }
             break;

@@ -11,7 +11,6 @@ import ru.nsu.fit.ibaksheev.game.snake.SnakeView;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
-import java.net.Inet4Address;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -46,7 +45,6 @@ public class PlayerController {
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
-    private final PlayerSignature mySignature;
 
     @Getter
     private final Subject<MessageWithSender> newMessageSubject = PublishSubject.create();
@@ -64,10 +62,6 @@ public class PlayerController {
         this.name = name;
         this.role = role;
         roleSubject.onNext(role);
-        mySignature = new PlayerSignature(Inet4Address.getLocalHost().getHostAddress(), listenPort);
-        logger.info(name + " started with " + mySignature);
-
-
 
         state = SnakesProto.GameState.newBuilder()
                 .setStateOrder(0)
@@ -123,11 +117,10 @@ public class PlayerController {
         roleLock.lock();
         role = SnakesProto.NodeRole.MASTER;
         playersManager.updatePlayer(
-                mySignature,
                 SnakesProto.GamePlayer.newBuilder()
                         .setName(name)
                         .setId(myId)
-                        .setIpAddress(mySignature.getIp())
+                        .setIpAddress("")
                         .setPort(listenPort)
                         .setScore(0)
                         .setRole(role)
@@ -159,7 +152,7 @@ public class PlayerController {
                 logger.info("MASTER saw DEPUTY dead, he selects NORMAL as DEPUTY");
                 playersManager.getNormal().ifPresent(
                         newDeputy -> {
-                            playersManager.changeRole(new PlayerSignature(newDeputy), SnakesProto.NodeRole.DEPUTY);
+                            playersManager.changeRole(newDeputy.getId(), SnakesProto.NodeRole.DEPUTY);
                             unicastManager.sendPacket(
                                     newDeputy.getIpAddress(),
                                     newDeputy.getPort(),
@@ -181,7 +174,7 @@ public class PlayerController {
             if (deadPlayer.getRole() == SnakesProto.NodeRole.MASTER) {
                 logger.info("NORMAL saw MASTER dead, he selects DEPUTY as MASTER");
                 playersManager.getDeputy().ifPresent(
-                        deputy -> playersManager.changeRole(new PlayerSignature(deputy), SnakesProto.NodeRole.MASTER)
+                        deputy -> playersManager.changeRole(deputy.getId(), SnakesProto.NodeRole.MASTER)
                 );
             }
         }
@@ -195,9 +188,7 @@ public class PlayerController {
                 role = SnakesProto.NodeRole.MASTER;
                 roleSubject.onNext(role);
                 roleLock.unlock();
-                playersManager.changeRole(mySignature, SnakesProto.NodeRole.MASTER);
-                System.out.println(mySignature);
-                System.out.println(playersManager.getPlayers());
+                playersManager.changeRole(myId, SnakesProto.NodeRole.MASTER);
 
                 // если мастер сдох, а депутат это увидел раньше и назначил нормала депутатом до того как он понял, что мастер сдох
                 // то нормал-депутат как только увидит что мастер сдох, станет мастером (а мастер уже есть)
@@ -208,7 +199,7 @@ public class PlayerController {
                         continue;
                     }
                     if (!hasDeputy) {
-                        playersManager.changeRole(new PlayerSignature(player), SnakesProto.NodeRole.DEPUTY);
+                        playersManager.changeRole(player.getId(), SnakesProto.NodeRole.DEPUTY);
                     }
                     System.out.printf("Telling %s he is %s%n", player.getName(), !hasDeputy ? SnakesProto.NodeRole.DEPUTY : SnakesProto.NodeRole.NORMAL);
                     unicastManager.sendPacket(
@@ -303,7 +294,6 @@ public class PlayerController {
                     );
                     if (playersManager.getDeputy().isEmpty()) {
                         playersManager.updatePlayer(
-                                signature,
                                 SnakesProto.GamePlayer.newBuilder()
                                         .setName(msg.getMessage().getJoin().getName())
                                         .setRole(SnakesProto.NodeRole.DEPUTY)
@@ -327,7 +317,6 @@ public class PlayerController {
                         );
                     } else {
                         playersManager.updatePlayer(
-                                signature,
                                 SnakesProto.GamePlayer.newBuilder()
                                         .setName(msg.getMessage().getJoin().getName())
                                         .setRole(SnakesProto.NodeRole.NORMAL)
@@ -343,9 +332,16 @@ public class PlayerController {
             if (role != SnakesProto.NodeRole.MASTER) {
                 if (msg.getMessage().hasState()) {
                     var state = msg.getMessage().getState().getState();
-                    state.getPlayers().getPlayersList().forEach(player -> playersManager.updatePlayer(
-                            new PlayerSignature(player), player
-                    ));
+                    state.getPlayers().getPlayersList().forEach(gamePlayer -> {
+                        var newPlayer = SnakesProto.GamePlayer.newBuilder(gamePlayer);
+                        if (gamePlayer.getIpAddress().length() == 0) {
+                            newPlayer.setIpAddress(msg.getIp());
+                        }
+                        if (gamePlayer.getId() == myId) {
+                            newPlayer.setIpAddress("");
+                        }
+                        playersManager.updatePlayer(newPlayer.build());
+                    });
                 }
             }
             if (msg.getMessage().hasAck() && msg.getMessage().hasReceiverId()) {
@@ -358,10 +354,11 @@ public class PlayerController {
                     logger.info("switched from " + role + " to " + roleChange.getReceiverRole());
                     role = roleChange.getReceiverRole();
                     roleSubject.onNext(role);
+                    playersManager.changeRole(myId, roleChange.getReceiverRole());
                 }
                 if (roleChange.hasSenderRole()) {
                     logger.info("switched sender to " + roleChange.getSenderRole());
-                    playersManager.changeRole(signature, roleChange.getSenderRole());
+                    playersManager.changeRole(msg.getMessage().getSenderId(), roleChange.getSenderRole());
                 }
             }
             newMessageSubject.onNext(msg);
@@ -396,10 +393,10 @@ public class PlayerController {
                         .setMsgSeq(0)
                         .build();
 
-                for (var playerSignature : playersManager.getSignatures()) {
+                for (var player : playersManager.getPlayers()) {
                     unicastManager.sendPacket(
-                            playerSignature.getIp(),
-                            playerSignature.getPort(),
+                            player.getIpAddress(),
+                            player.getPort(),
                             msg
                     );
                 }

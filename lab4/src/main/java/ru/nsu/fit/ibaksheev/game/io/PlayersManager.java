@@ -12,7 +12,6 @@ import ru.nsu.fit.ibaksheev.game.io.datatypes.PlayerSignature;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -34,7 +33,7 @@ public class PlayersManager {
 
     private static final Logger logger = Logger.getLogger(UnicastManager.class.getName());
 
-    private final HashMap<PlayerSignature, PlayerWrapper> players;
+    private final HashMap<Integer, PlayerWrapper> players;
 
     private final Consumer<SnakesProto.GamePlayer> onPlayerDeadListener;
     private final Thread checkDeadWorkerThread;
@@ -57,34 +56,34 @@ public class PlayersManager {
     }
 
     void touchPlayer(PlayerSignature signature) {
-//        System.out.println(signature);
-        var playerWrapper = players.get(signature);
-        if (playerWrapper != null) {
-            playerWrapper.setLastSeen(System.currentTimeMillis());
-        }
+        players.values().stream().filter(playerWrapper -> new PlayerSignature(playerWrapper.getPlayer()).equals(signature)).findAny().ifPresent(
+                playerWrapper -> playerWrapper.setLastSeen(System.currentTimeMillis())
+        );
     }
 
     public int getNextPlayerId() {
         return maxPlayerId + 1;
     }
 
-    void updatePlayer(PlayerSignature signature, SnakesProto.GamePlayer player) {
+    void updatePlayer(SnakesProto.GamePlayer player) {
 //        logger.info(signature.toString());
         maxPlayerId = Math.max(maxPlayerId, player.getId());
-        players.put(
-                signature,
-                PlayerWrapper.builder()
-                        .player(player)
-                        .lastSeen(System.currentTimeMillis())
-                        .build()
-        );
+        synchronized (players) {
+            players.put(
+                    player.getId(),
+                    PlayerWrapper.builder()
+                            .player(player)
+                            .lastSeen(System.currentTimeMillis())
+                            .build()
+            );
+        }
     }
 
-    void changeRole(PlayerSignature signature, SnakesProto.NodeRole role) {
+    void changeRole(int playerId, SnakesProto.NodeRole role) {
         synchronized (players) {
-            var player = players.get(signature);
+            var player = players.get(playerId);
             if (player != null) {
-                players.put(signature,
+                players.put(playerId,
                         new PlayerWrapper(
                                 SnakesProto.GamePlayer.newBuilder(player.getPlayer()).setRole(role).build(),
                                 player.getLastSeen()
@@ -92,10 +91,6 @@ public class PlayersManager {
                 );
             }
         }
-    }
-
-    Set<PlayerSignature> getSignatures() {
-        return players.keySet();
     }
 
     Collection<SnakesProto.GamePlayer> getPlayers() {
