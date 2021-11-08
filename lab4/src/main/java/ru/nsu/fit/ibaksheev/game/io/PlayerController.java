@@ -90,6 +90,10 @@ public class PlayerController {
                     return control;
                 }),
                 player -> {
+//                    if (player.getRole() == SnakesProto.NodeRole.DEPUTY) {
+//                        playersManager.changeRole(player.getId(), SnakesProto.NodeRole.VIEWER);
+//                        selectDeputy();
+//                    }
 //                    setRole(SnakesProto.NodeRole.VIEWER);
 ////                    playersManager.changeRole(player.getId(), SnakesProto.NodeRole.VIEWER);
 //                    unicastManager.sendPacket(
@@ -180,6 +184,26 @@ public class PlayerController {
         sendGameStateWorkerThread.interrupt();
     }
 
+    private void selectDeputy() {
+        playersManager.getNormal().ifPresent(
+                newDeputy -> {
+                    playersManager.changeRole(newDeputy.getId(), SnakesProto.NodeRole.DEPUTY);
+                    unicastManager.sendPacket(
+                            newDeputy.getIpAddress(),
+                            newDeputy.getPort(),
+                            SnakesProto.GameMessage.newBuilder()
+                                    .setMsgSeq(0)
+                                    .setRoleChange(SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
+                                            .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
+                                            .setSenderRole(SnakesProto.NodeRole.MASTER)
+                                            .build()
+                                    )
+                                    .build()
+                    );
+                }
+        );
+    }
+
     private void onPlayerDeadListener(SnakesProto.GamePlayer deadPlayer) {
 //        logger.warning(String.format("me is %s, he is %s", mySignature, new PlayerSignature(deadPlayer)));
         logger.warning(String.format("%s (%s): %s (%s) is dead", name, role, deadPlayer.getName(), deadPlayer.getRole()));
@@ -187,23 +211,7 @@ public class PlayerController {
         if (role == SnakesProto.NodeRole.MASTER) {
             if (deadPlayer.getRole() == SnakesProto.NodeRole.DEPUTY) {
                 logger.info("MASTER saw DEPUTY dead, he selects NORMAL as DEPUTY");
-                playersManager.getNormal().ifPresent(
-                        newDeputy -> {
-                            playersManager.changeRole(newDeputy.getId(), SnakesProto.NodeRole.DEPUTY);
-                            unicastManager.sendPacket(
-                                    newDeputy.getIpAddress(),
-                                    newDeputy.getPort(),
-                                    SnakesProto.GameMessage.newBuilder()
-                                            .setMsgSeq(0)
-                                            .setRoleChange(SnakesProto.GameMessage.RoleChangeMsg.newBuilder()
-                                                    .setReceiverRole(SnakesProto.NodeRole.DEPUTY)
-                                                    .setSenderRole(SnakesProto.NodeRole.MASTER)
-                                                    .build()
-                                            )
-                                            .build()
-                            );
-                        }
-                );
+                selectDeputy();
             }
         }
         // Узел с ролью NORMAL заметил, что отвалился MASTER. Тогда он заменяет информацию о центральном узле на заместителя (DEPUTY), т.е начинает посылать все unicast-сообщения в сторону DEPUTY.
@@ -429,6 +437,9 @@ public class PlayerController {
 
                 state = snakeMasterController.getNextState(oldState);
                 state.getPlayers().getPlayersList().forEach(playersManager::updatePlayerWithoutTouch);
+                if (playersManager.getDeputy().isEmpty()) {
+                    selectDeputy();
+                }
 
                 var msg = SnakesProto.GameMessage.newBuilder()
                         .setState(
