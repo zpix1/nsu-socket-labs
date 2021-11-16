@@ -3,6 +3,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 
 public class Socks5Proxy implements Runnable {
@@ -59,6 +60,45 @@ public class Socks5Proxy implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void accept(SelectionKey key) throws IOException {
+        var channel = (SocketChannel) key.channel();
+        channel.configureBlocking(false);
+        channel.register(key.selector(), SelectionKey.OP_READ);
+    }
+
+    private void read(SelectionKey key) throws IOException {
+        var channel = (SocketChannel) key.channel();
+        var attachment = (Attachment) key.attachment();
+
+        if (attachment == null) {
+            attachment = new Attachment();
+            attachment.in = ByteBuffer.allocate(BUFFER_SIZE);
+            key.attach(attachment);
+        }
+
+        // All data is read
+        if (channel.read(attachment.in) <= 0) {
+            close(key);
+        }
+        // First read, there is no second end, so read
+        else if (attachment.peer == null) {
+            readClientRequest(key);
+        }
+        // we know second send, so proxy bytes
+        else {
+            // start writing to second end
+            attachment.peer.interestOpsOr(SelectionKey.OP_WRITE);
+            // stop reading while buffer is not written
+            key.interestOpsAnd(SelectionKey.OP_READ);
+            attachment.in.flip();
+        }
+    }
+
+    private void readClientRequest(SelectionKey key) {
+        var channel = (SocketChannel) key.channel();
+        var attachment = (Attachment) key.attachment();
     }
 
     public static void main(String[] args) {
