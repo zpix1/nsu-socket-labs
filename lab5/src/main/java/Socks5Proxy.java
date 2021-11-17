@@ -1,11 +1,16 @@
+import org.xbill.DNS.Record;
+import org.xbill.DNS.*;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
+import java.util.Arrays;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
@@ -35,6 +40,8 @@ public class Socks5Proxy implements Runnable {
         public ByteBuffer in;
         public ByteBuffer out;
         public SelectionKey peer;
+
+        int port;
     }
 
     public Socks5Proxy(String host, int port) {
@@ -43,15 +50,15 @@ public class Socks5Proxy implements Runnable {
     }
 
     void debug(String text, ByteBuffer b) {
-        var ar = b.array();
-        StringBuilder s = new StringBuilder(text);
-        s.append(": ");
-        int to = b.remaining() == 0 ? b.position() : b.remaining();
-        to = Math.min(to, 100);
-        for (var i = 0; i < to; i++) {
-            s.append(String.format(" %02x", ar[i]));
-        }
-        log.info(s.toString());
+//        var ar = b.array();
+//        StringBuilder s = new StringBuilder(text);
+//        s.append(": ");
+//        int to = b.remaining() == 0 ? b.position() : b.remaining();
+//        to = Math.min(to, 1000);
+//        for (var i = 0; i < to; i++) {
+//            s.append(String.format(" %02x", ar[i]));
+//        }
+//        log.info(s.toString());
     }
 
     @Override
@@ -79,13 +86,6 @@ public class Socks5Proxy implements Runnable {
                                 connect(key);
                             } else if (key.isReadable()) {
                                 read(key);
-//                                if (attachment == null) {
-//                                    read(key);
-//                                }
-//                                switch (attachment.type) {
-//                                    case AUTH_READ -> read(key);
-//                                    default -> throw new AssertionError("Unexpected attachment type " + attachment.type);
-//                                }
                             } else if (key.isWritable()) {
                                 write(key);
                             }
@@ -125,9 +125,7 @@ public class Socks5Proxy implements Runnable {
     }
 
     private void read(SelectionKey key) throws IOException, Socks5Exception {
-        var channel = (SocketChannel) key.channel();
         var attachment = (Attachment) key.attachment();
-
         if (attachment == null) {
             log.info("Created AUTH_READ attachment for client");
             attachment = new Attachment();
@@ -136,27 +134,48 @@ public class Socks5Proxy implements Runnable {
             key.attach(attachment);
         }
 
-        // All data is read
-        if (channel.read(attachment.in) <= 0) {
-            log.info("Read all data, closing connection");
-            close(key);
-        }
-        // First read, there is no second end, so read auth request
-        else if (attachment.type == Type.AUTH_READ) {
-            log.info("Reading header");
-            scanAndReplyAuthRequest(key);
-        } else if (attachment.peer == null) {
-            scanAndReplyConnectionRequest(key);
-        }
-        // We know second send, so proxy bytes
-        else {
-            log.info("Got something request " + attachment.in.position());
-            debug("Read", attachment.in);
-            // Start writing to second end
-            attachment.peer.interestOpsOr(SelectionKey.OP_WRITE);
-            // Stop reading while buffer is not written
-            key.interestOpsAnd(SelectionKey.OP_READ);
-            attachment.in.flip();
+        if (attachment.type == Type.DNS_READ) {
+            var channel = (DatagramChannel) key.channel();
+            if (channel.read(attachment.in) <= 0) {
+                close(key);
+                throw new IOException("Invalid DNS reply");
+            } else {
+                var message = new Message(attachment.in.array());
+                var maybeRecord = message.getSection(Section.ANSWER).stream().findAny();
+                if (maybeRecord.isPresent()) {
+                    var ipAddr = InetAddress.getByName(maybeRecord.get().rdataToString());
+                    log.info("Resolved: " + maybeRecord.get().rdataToString());
+                    registerPeer(ipAddr, attachment.port, attachment.peer);
+                    key.interestOps(0);
+                    closeEnd(key);
+                } else {
+                    log.warning(message.toString());
+                    close(key);
+                    throw new RuntimeException("Host cannot be resolved");
+                }
+            }
+        } else {
+            var channel = (SocketChannel) key.channel();
+
+            // All data is read
+            if (channel.read(attachment.in) <= 0) {
+                log.info("Read all data, closing connection");
+                close(key);
+            }
+            // First read, there is no second end, so read auth request
+            else if (attachment.type == Type.AUTH_READ) {
+                log.info("Reading header");
+                scanAndReplyAuthRequest(key);
+            } else if (attachment.peer == null) {
+                scanAndReplyConnectionRequest(key);
+            }
+            // We know second send, so proxy bytes
+            else {
+                debug("Read", attachment.in);
+                attachment.peer.interestOps(attachment.peer.interestOps() | SelectionKey.OP_WRITE);
+                key.interestOps(key.interestOps() ^ SelectionKey.OP_READ);
+                attachment.in.flip();
+            }
         }
     }
 
@@ -229,50 +248,121 @@ public class Socks5Proxy implements Runnable {
             var portPos = 8;
             var connectPort = ((data[portPos] & 0xFF) << 8) + (data[portPos + 1] & 0xFF);
 
-            log.info(String.format("Connecting to addr %s:%d", connectAddr, connectPort));
+            registerPeer(connectAddr, connectPort, key);
+            key.interestOps(0);
+        } else if (data[3] == Socks5Params.ADDR_TYPE_HOST) {
+            var hostLen = data[4];
+            var hostStart = 5;
+            if (len < hostLen + hostStart + 2) {
+                log.warning("waiting for more data");
+                return;
+            } else if (len > hostLen + hostStart + 2) {
+                throw new Socks5Exception("invalid connection request", 4);
+            }
+            var host = new String(Arrays.copyOfRange(data, hostStart, hostStart + hostLen));
+            var portPos = hostStart + hostLen;
+            var connectPort = ((data[portPos] & 0xFF) << 8) + (data[portPos + 1] & 0xFF);
 
-            var peer = SocketChannel.open();
-            peer.configureBlocking(false);
-            peer.connect(new InetSocketAddress(connectAddr, connectPort));
-            var peerKey = peer.register(key.selector(), SelectionKey.OP_CONNECT);
+            log.info(String.format("Resolving host %s:%d", host, connectPort));
 
             key.interestOps(0);
-            attachment.peer = peerKey;
-            Attachment peerAttachment = new Attachment();
-            peerAttachment.peer = key;
-            peerKey.attach(peerAttachment);
 
-            attachment.in.clear();
-        } else if (data[3] == Socks5Params.ADDR_TYPE_HOST) {
-            log.info("Found host");
-            throw new Socks5Exception("Host is not supported yet", 3);
+            requestHostResolve(host, connectPort, key);
         }
 
         log.info("Successfully parsed connection header");
     }
 
+    private void registerPeer(InetAddress connectAddr, int connectPort, SelectionKey backKey) throws IOException {
+        log.info(String.format("Connecting to addr %s:%d", connectAddr, connectPort));
+
+        var peer = SocketChannel.open();
+        peer.configureBlocking(false);
+        peer.connect(new InetSocketAddress(connectAddr, connectPort));
+        var peerKey = peer.register(backKey.selector(), SelectionKey.OP_CONNECT);
+
+        ((Attachment) backKey.attachment()).peer = peerKey;
+        Attachment peerAttachment = new Attachment();
+        peerAttachment.peer = backKey;
+        peerKey.attach(peerAttachment);
+
+        ((Attachment) backKey.attachment()).in.clear();
+    }
+
+    private void requestHostResolve(String host, int backPort, SelectionKey backKey) throws IOException {
+        var peer = DatagramChannel.open();
+        peer.connect(ResolverConfig.getCurrentConfig().server());
+        peer.configureBlocking(false);
+
+        var key = peer.register(backKey.selector(), SelectionKey.OP_WRITE);
+
+        Attachment attachment = new Attachment();
+        attachment.type = Type.DNS_WRITE;
+        attachment.port = backPort;
+        attachment.peer = backKey;
+        attachment.in = ByteBuffer.allocate(BUFFER_SIZE);
+
+        var message = new Message();
+        var record = Record.newRecord(Name.fromString(host + '.').canonicalize(), org.xbill.DNS.Type.A, DClass.IN);
+        message.addRecord(record, Section.QUESTION);
+
+        var header = message.getHeader();
+//        header.setFlag(Flags.Q);
+        header.setFlag(Flags.AD);
+        header.setFlag(Flags.RD);
+
+        attachment.in.put(message.toWire());
+        attachment.in.flip();
+        attachment.out = attachment.in;
+
+        key.attach(attachment);
+
+        log.info("Registered write to server dns request");
+    }
+
     private void write(SelectionKey key) throws IOException {
-        var channel = ((SocketChannel) key.channel());
         var attachment = ((Attachment) key.attachment());
+        if (attachment.type == Type.DNS_WRITE) {
+            var channel = ((DatagramChannel) key.channel());
 
-        debug("Write", attachment.out);
+            debug("DNS request", attachment.out);
 
-        if (channel.write(attachment.out) == -1) {
-            close(key);
-        } else if (attachment.out.remaining() == 0) {
-            if (attachment.type == Type.AUTH_WRITE) {
-                log.info("Writing auth reply");
-                attachment.out.clear();
-                key.interestOps(SelectionKey.OP_READ);
-                attachment.type = Type.READ;
-            } else if (attachment.peer == null) {
+            if (channel.write(attachment.out) == -1) {
                 close(key);
-            } else {
+            } else if (attachment.out.remaining() == 0) {
+                log.info("Sent DNS request");
                 attachment.out.clear();
-                attachment.peer.interestOpsOr(SelectionKey.OP_READ);
+                attachment.type = Type.DNS_READ;
+                key.interestOpsOr(SelectionKey.OP_READ);
                 key.interestOpsAnd(~SelectionKey.OP_WRITE);
             }
+        } else {
+            var channel = ((SocketChannel) key.channel());
+
+            debug("Write", attachment.out);
+
+            if (channel.write(attachment.out) == -1) {
+                close(key);
+            } else if (attachment.out.remaining() == 0) {
+                if (attachment.type == Type.AUTH_WRITE) {
+                    log.info("Writing auth reply");
+                    attachment.out.clear();
+                    key.interestOps(SelectionKey.OP_READ);
+                    attachment.type = Type.READ;
+                } else if (attachment.peer == null) {
+                    close(key);
+                } else {
+                    attachment.out.clear();
+                    attachment.peer.interestOps(attachment.peer.interestOps() | SelectionKey.OP_READ);
+                    key.interestOps(key.interestOps() ^ SelectionKey.OP_WRITE);
+                }
+            }
         }
+    }
+
+    private static void closeEnd(SelectionKey key) throws IOException {
+        key.cancel();
+        key.channel().close();
     }
 
     private static void close(SelectionKey key) throws IOException {
