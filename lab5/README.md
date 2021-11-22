@@ -1,4 +1,4 @@
-# [lab4](http://fit.ippolitov.me/CN_2/2021/5.html)
+# [lab5](http://fit.ippolitov.me/CN_2/2021/5.html)
 
 > SOCKS-прокси
 
